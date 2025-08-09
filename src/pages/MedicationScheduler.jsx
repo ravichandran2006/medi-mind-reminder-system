@@ -18,7 +18,8 @@ import {
   Trash2,
   Bell,
   CheckCircle2,
-  AlertTriangle
+  AlertTriangle,
+  RefreshCw
 } from "lucide-react";
 
 const DAYS_OF_WEEK = [
@@ -35,6 +36,7 @@ const MedicationScheduler = () => {
   const [medications, setMedications] = useState([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingMed, setEditingMed] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
 
   const [formData, setFormData] = useState({
@@ -49,60 +51,54 @@ const MedicationScheduler = () => {
     reminders: true
   });
 
-  // Load medications from backend
+  // API URL with fallback
+  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+
   useEffect(() => {
-    const fetchMedications = async () => {
-      try {
-        const token = localStorage.getItem('token');
-        const response = await fetch('http://localhost:5000/api/medications', {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        });
+    loadMedications();
+  }, []);
 
-        if (response.ok) {
-          const data = await response.json();
-          setMedications(data.medications);
-        }
-      } catch (error) {
-        console.error('Error fetching medications:', error);
-        toast({
-          title: "Error",
-          description: "Failed to load medications",
-          variant: "destructive"
-        });
-      }
-    };
-
-    fetchMedications();
-  }, [toast]);
-
-  // Save medications to backend
-  const saveMedications = async (meds) => {
+  const loadMedications = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:5000/api/medications', {
-        method: 'POST',
+      if (!token) {
+        // If no token, use localStorage data only
+        const storedMedications = JSON.parse(localStorage.getItem('medications') || '[]');
+        setMedications(storedMedications);
+        return;
+      }
+
+      // Load from backend
+      const response = await fetch(`${API_URL}/medications`, {
         headers: {
           'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(meds),
+          'Content-Type': 'application/json'
+        }
       });
 
       if (response.ok) {
         const data = await response.json();
-        setMedications(prev => [...prev, data.medication]);
+        setMedications(data.medications || []);
+        // Also update localStorage for offline access
+        localStorage.setItem('medications', JSON.stringify(data.medications || []));
+      } else {
+        // Fallback to localStorage if backend fails
+        const storedMedications = JSON.parse(localStorage.getItem('medications') || '[]');
+        setMedications(storedMedications);
+        console.warn('Backend unavailable, using local storage');
       }
     } catch (error) {
-      console.error('Error saving medication:', error);
-      toast({
-        title: "Error",
-        description: "Failed to save medication",
-        variant: "destructive"
-      });
+      console.error('Error loading medications:', error);
+      // Fallback to localStorage
+      const storedMedications = JSON.parse(localStorage.getItem('medications') || '[]');
+      setMedications(storedMedications);
     }
+  };
+
+  // Save medications to localStorage
+  const saveMedications = (meds) => {
+    localStorage.setItem('medications', JSON.stringify(meds));
+    setMedications(meds);
   };
 
   // Generate time slots based on frequency
@@ -112,7 +108,7 @@ const MedicationScheduler = () => {
       case 'twice': return ['09:00', '21:00'];
       case 'three': return ['08:00', '14:00', '20:00'];
       case 'four': return ['08:00', '13:00', '18:00', '23:00'];
-      default: return [''];
+      default: return ['09:00'];
     }
   };
 
@@ -121,8 +117,8 @@ const MedicationScheduler = () => {
     setFormData({ ...formData, frequency, times: newTimes });
   };
 
-  const handleSubmit = () => {
-    if (!formData.name || !formData.dosage || formData.times.some(t => !t)) {
+  const handleSubmit = async () => {
+    if (!formData.name || !formData.dosage || formData.times.length === 0) {
       toast({
         title: "Validation Error",
         description: "Please fill in all required fields",
@@ -131,31 +127,101 @@ const MedicationScheduler = () => {
       return;
     }
 
-    const medication = {
-      id: editingMed ? editingMed.id : Date.now().toString(),
-      ...formData
-    };
+    setIsLoading(true);
 
-    let newMedications;
-    if (editingMed) {
-      newMedications = medications.map(med => 
-        med.id === editingMed.id ? medication : med
-      );
+    try {
+      const newMedication = {
+        id: editingMed ? editingMed.id : Date.now().toString(),
+        name: formData.name,
+        dosage: formData.dosage,
+        frequency: formData.frequency,
+        times: formData.times,
+        startDate: formData.startDate,
+        endDate: formData.endDate,
+        days: formData.days,
+        instructions: formData.instructions,
+        reminders: formData.reminders
+      };
+
+      const token = localStorage.getItem('token');
+      
+      // Try to save to backend if token exists
+      if (token) {
+        try {
+          if (editingMed) {
+            // Update existing medication
+            const response = await fetch(`${API_URL}/medications/${editingMed.id}`, {
+              method: 'PUT',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+              },
+              body: JSON.stringify(newMedication)
+            });
+
+            if (!response.ok) {
+              const errorData = await response.json().catch(() => ({}));
+              throw new Error(errorData.message || 'Failed to update medication');
+            }
+          } else {
+            // Create new medication
+            const response = await fetch(`${API_URL}/medications`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+              },
+              body: JSON.stringify(newMedication)
+            });
+
+            if (!response.ok) {
+              const errorData = await response.json().catch(() => ({}));
+              throw new Error(errorData.message || 'Failed to create medication');
+            }
+
+            const result = await response.json();
+            if (result.medication && result.medication.id) {
+              newMedication.id = result.medication.id; // Use backend-generated ID
+            }
+          }
+        } catch (backendError) {
+          console.error('Backend error:', backendError);
+          // Continue with local storage if backend fails
+          toast({
+            title: "Warning",
+            description: "Backend unavailable, saving locally only",
+            variant: "default"
+          });
+        }
+      }
+
+      // Always update local storage
+      const updatedMedications = editingMed
+        ? medications.map(med => med.id === editingMed.id ? newMedication : med)
+        : [...medications, newMedication];
+      
+      saveMedications(updatedMedications);
+
+      // Automatic SMS reminders are handled by the backend notification scheduler
+      // No need to manually schedule here as it's done automatically when medication is created
+
       toast({
-        title: "Medication Updated",
-        description: `${medication.name} has been updated successfully.`,
+        title: editingMed ? "Medication Updated" : "Medication Added",
+        description: `${newMedication.name} has been ${editingMed ? 'updated' : 'added'} to your schedule.`,
       });
-    } else {
-      newMedications = [...medications, medication];
+
+      setIsDialogOpen(false);
+      resetForm();
+    } catch (error) {
+      console.error('Error saving medication:', error);
       toast({
-        title: "Medication Added",
-        description: `${medication.name} has been added to your schedule.`,
+        title: "Error",
+        description: error.message || "Failed to save medication",
+        variant: "destructive"
       });
+    } finally {
+      setIsLoading(false);
     }
-
-    saveMedications(newMedications);
-    setIsDialogOpen(false);
-    resetForm();
   };
 
   const resetForm = () => {
@@ -189,13 +255,49 @@ const MedicationScheduler = () => {
     setIsDialogOpen(true);
   };
 
-  const handleDelete = (id) => {
-    const newMedications = medications.filter(med => med.id !== id);
-    saveMedications(newMedications);
-    toast({
-      title: "Medication Removed",
-      description: "Medication has been removed from your schedule.",
-    });
+  const handleDelete = async (id) => {
+    try {
+      const token = localStorage.getItem('token');
+      
+      // Try to remove from backend if token exists
+      if (token) {
+        try {
+          const response = await fetch(`${API_URL}/medications/${id}`, {
+            method: 'DELETE',
+            headers: {
+              'Authorization': `Bearer ${token}`
+            }
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.message || 'Failed to delete medication from server');
+          }
+        } catch (backendError) {
+          console.error('Backend delete error:', backendError);
+          // Continue with local deletion if backend fails
+        }
+      }
+
+      // Remove from local state and localStorage
+      const newMedications = medications.filter(med => med.id !== id);
+      saveMedications(newMedications);
+      
+      // Automatic SMS reminders are handled by the backend notification scheduler
+      // No need to manually remove here as it's done automatically when medication is deleted
+      
+      toast({
+        title: "Medication Removed",
+        description: "Medication has been removed from your schedule.",
+      });
+    } catch (error) {
+      console.error('Error deleting medication:', error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete medication",
+        variant: "destructive"
+      });
+    }
   };
 
   const toggleDay = (day) => {
@@ -205,171 +307,227 @@ const MedicationScheduler = () => {
     setFormData({ ...formData, days: newDays });
   };
 
+
+
+  const handleRefresh = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        toast({
+          title: "Not Authenticated",
+          description: "Please log in to sync with server",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      const response = await fetch(`${API_URL}/medications`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setMedications(data.medications || []);
+        localStorage.setItem('medications', JSON.stringify(data.medications || []));
+        toast({
+          title: "Sync Complete",
+          description: "Medications synced with server",
+        });
+      } else {
+        throw new Error('Failed to fetch medications');
+      }
+    } catch (error) {
+      console.error('Error refreshing medications:', error);
+      toast({
+        title: "Sync Failed",
+        description: error.message || "Failed to sync with server",
+        variant: "destructive"
+      });
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-accent p-6">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-6">
       <div className="max-w-6xl mx-auto space-y-8">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-foreground">Medication Scheduler</h1>
-            <p className="text-muted-foreground">Manage your daily medication routine</p>
+            <h1 className="text-3xl font-bold text-gray-900">Medication Scheduler</h1>
+            <p className="text-gray-600">Manage your daily medication routine</p>
           </div>
           
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogTrigger asChild>
-              <Button 
-                className="bg-gradient-primary hover:shadow-glow transition-all duration-300"
-                onClick={resetForm}
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Add Medication
-              </Button>
-            </DialogTrigger>
-
-            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle>
-                  {editingMed ? "Edit Medication" : "Add New Medication"}
-                </DialogTitle>
-              </DialogHeader>
-
-              <div className="space-y-6">
-                {/* Basic Information */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="name">Medication Name *</Label>
-                    <Input
-                      id="name"
-                      value={formData.name}
-                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                      placeholder="e.g., Vitamin D, Aspirin"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="dosage">Dosage *</Label>
-                    <Input
-                      id="dosage"
-                      value={formData.dosage}
-                      onChange={(e) => setFormData({ ...formData, dosage: e.target.value })}
-                      placeholder="e.g., 500mg, 1 tablet"
-                    />
-                  </div>
-                </div>
-
-                {/* Frequency and Times */}
-                <div>
-                  <Label>Frequency *</Label>
-                  <Select value={formData.frequency} onValueChange={handleFrequencyChange}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select frequency" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="once">Once daily</SelectItem>
-                      <SelectItem value="twice">Twice daily</SelectItem>
-                      <SelectItem value="three">Three times daily</SelectItem>
-                      <SelectItem value="four">Four times daily</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* Times */}
-                <div>
-                  <Label>Times *</Label>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                    {formData.times.map((time, index) => (
-                      <Input
-                        key={index}
-                        type="time"
-                        value={time}
-                        onChange={(e) => {
-                          const newTimes = [...formData.times];
-                          newTimes[index] = e.target.value;
-                          setFormData({ ...formData, times: newTimes });
-                        }}
-                      />
-                    ))}
-                  </div>
-                </div>
-
-                {/* Dates */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="startDate">Start Date *</Label>
-                    <Input
-                      id="startDate"
-                      type="date"
-                      value={formData.startDate}
-                      onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="endDate">End Date (Optional)</Label>
-                    <Input
-                      id="endDate"
-                      type="date"
-                      value={formData.endDate}
-                      onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
-                    />
-                  </div>
-                </div>
-
-                {/* Days of Week */}
-                <div>
-                  <Label>Days of Week (Leave empty for daily)</Label>
-                  <div className="flex flex-wrap gap-2 mt-2">
-                    {DAYS_OF_WEEK.map((day) => (
-                      <Button
-                        key={day.id}
-                        variant={formData.days.includes(day.id) ? "default" : "outline"}
-                        size="sm"
-                        onClick={() => toggleDay(day.id)}
-                        className={formData.days.includes(day.id) ? "bg-primary" : ""}
-                      >
-                        {day.label}
-                      </Button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Instructions */}
-                <div>
-                  <Label htmlFor="instructions">Instructions (Optional)</Label>
-                  <Textarea
-                    id="instructions"
-                    value={formData.instructions}
-                    onChange={(e) => setFormData({ ...formData, instructions: e.target.value })}
-                    placeholder="e.g., Take with food, Before bedtime..."
-                  />
-                </div>
-
-                {/* Reminders */}
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="reminders"
-                    checked={formData.reminders}
-                    onCheckedChange={(checked) => 
-                      setFormData({ ...formData, reminders: checked })
-                    }
-                  />
-                  <Label htmlFor="reminders">Enable reminders</Label>
-                </div>
-
-                <Button onClick={handleSubmit} className="w-full bg-gradient-primary">
-                  {editingMed ? "Update Medication" : "Add Medication"}
+          <div className="flex items-center space-x-3">
+            <Button
+              variant="outline"
+              onClick={handleRefresh}
+              className="flex items-center space-x-2"
+            >
+              <RefreshCw className="h-4 w-4" />
+              <span>Sync</span>
+            </Button>
+            
+            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+              <DialogTrigger asChild>
+                <Button 
+                  className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-lg hover:shadow-xl transition-all duration-300"
+                  onClick={resetForm}
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Medication
                 </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
+              </DialogTrigger>
+
+              <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>
+                    {editingMed ? "Edit Medication" : "Add New Medication"}
+                  </DialogTitle>
+                </DialogHeader>
+
+                <div className="space-y-6">
+                  {/* Basic Information */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="name">Medication Name *</Label>
+                      <Input
+                        id="name"
+                        value={formData.name}
+                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                        placeholder="e.g., Vitamin D, Aspirin"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="dosage">Dosage *</Label>
+                      <Input
+                        id="dosage"
+                        value={formData.dosage}
+                        onChange={(e) => setFormData({ ...formData, dosage: e.target.value })}
+                        placeholder="e.g., 500mg, 1 tablet"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Frequency and Times */}
+                  <div>
+                    <Label>Frequency *</Label>
+                    <Select value={formData.frequency} onValueChange={handleFrequencyChange}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select frequency" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="once">Once daily</SelectItem>
+                        <SelectItem value="twice">Twice daily</SelectItem>
+                        <SelectItem value="three">Three times daily</SelectItem>
+                        <SelectItem value="four">Four times daily</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Times */}
+                  <div>
+                    <Label>Times *</Label>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                      {formData.times.map((time, index) => (
+                        <Input
+                          key={index}
+                          type="time"
+                          value={time}
+                          onChange={(e) => {
+                            const newTimes = [...formData.times];
+                            newTimes[index] = e.target.value;
+                            setFormData({ ...formData, times: newTimes });
+                          }}
+                        />
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Dates */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="startDate">Start Date *</Label>
+                      <Input
+                        id="startDate"
+                        type="date"
+                        value={formData.startDate}
+                        onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="endDate">End Date (Optional)</Label>
+                      <Input
+                        id="endDate"
+                        type="date"
+                        value={formData.endDate}
+                        onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Days of Week */}
+                  <div>
+                    <Label>Days of Week (Leave empty for daily)</Label>
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {DAYS_OF_WEEK.map((day) => (
+                        <Button
+                          key={day.id}
+                          variant={formData.days.includes(day.id) ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => toggleDay(day.id)}
+                          className={formData.days.includes(day.id) ? "bg-blue-600 text-white" : ""}
+                        >
+                          {day.label}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Instructions */}
+                  <div>
+                    <Label htmlFor="instructions">Instructions (Optional)</Label>
+                    <Textarea
+                      id="instructions"
+                      value={formData.instructions}
+                      onChange={(e) => setFormData({ ...formData, instructions: e.target.value })}
+                      placeholder="e.g., Take with food, Before bedtime..."
+                    />
+                  </div>
+
+                  {/* Reminders */}
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="reminders"
+                      checked={formData.reminders}
+                      onCheckedChange={(checked) => 
+                        setFormData({ ...formData, reminders: checked })
+                      }
+                    />
+                    <Label htmlFor="reminders">Enable reminders</Label>
+                  </div>
+
+                  <Button 
+                    onClick={handleSubmit} 
+                    disabled={isLoading}
+                    className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white"
+                  >
+                    {isLoading ? "Saving..." : (editingMed ? "Update Medication" : "Add Medication")}
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+          </div>
         </div>
 
         {/* Medications List */}
         <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
           {medications.map((medication) => (
-            <Card key={medication.id} className="border-0 shadow-card hover:shadow-medical transition-all duration-300">
+            <Card key={medication.id} className="border-0 shadow-lg hover:shadow-xl transition-all duration-300 bg-white">
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-lg flex items-center space-x-2">
-                    <Pill className="h-5 w-5 text-primary" />
+                    <Pill className="h-5 w-5 text-blue-600" />
                     <span>{medication.name}</span>
                   </CardTitle>
                   <div className="flex space-x-1">
@@ -380,7 +538,7 @@ const MedicationScheduler = () => {
                       variant="ghost" 
                       size="icon" 
                       onClick={() => handleDelete(medication.id)}
-                      className="text-destructive hover:text-destructive"
+                      className="text-red-600 hover:text-red-700"
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
@@ -393,12 +551,12 @@ const MedicationScheduler = () => {
                   <Badge variant="outline">{medication.frequency} daily</Badge>
                 </div>
                 
-                <div className="flex items-center space-x-2 text-sm text-muted-foreground">
+                <div className="flex items-center space-x-2 text-sm text-gray-600">
                   <Clock className="h-4 w-4" />
                   <span>{medication.times.join(", ")}</span>
                 </div>
 
-                <div className="flex items-center space-x-2 text-sm text-muted-foreground">
+                <div className="flex items-center space-x-2 text-sm text-gray-600">
                   <Calendar className="h-4 w-4" />
                   <span>
                     {medication.startDate} {medication.endDate && `- ${medication.endDate}`}
@@ -416,19 +574,19 @@ const MedicationScheduler = () => {
                 )}
 
                 {medication.instructions && (
-                  <p className="text-sm text-muted-foreground bg-accent/50 p-2 rounded">
+                  <p className="text-sm text-gray-600 bg-gray-50 p-2 rounded">
                     {medication.instructions}
                   </p>
                 )}
 
                 <div className="flex items-center space-x-2">
                   {medication.reminders ? (
-                    <div className="flex items-center space-x-1 text-success">
+                    <div className="flex items-center space-x-1 text-green-600">
                       <Bell className="h-4 w-4" />
                       <span className="text-xs">Reminders enabled</span>
                     </div>
                   ) : (
-                    <div className="flex items-center space-x-1 text-muted-foreground">
+                    <div className="flex items-center space-x-1 text-gray-500">
                       <AlertTriangle className="h-4 w-4" />
                       <span className="text-xs">No reminders</span>
                     </div>
@@ -440,19 +598,19 @@ const MedicationScheduler = () => {
         </div>
 
         {medications.length === 0 && (
-          <Card className="border-0 shadow-card text-center py-12">
+          <Card className="border-0 shadow-lg text-center py-12 bg-white">
             <CardContent>
               <div className="flex flex-col items-center space-y-4">
-                <div className="p-4 bg-accent rounded-full">
-                  <Pill className="h-8 w-8 text-muted-foreground" />
+                <div className="p-4 bg-blue-100 rounded-full">
+                  <Pill className="h-8 w-8 text-blue-600" />
                 </div>
                 <div>
                   <h3 className="text-lg font-medium">No medications scheduled</h3>
-                  <p className="text-muted-foreground">Add your first medication to get started</p>
+                  <p className="text-gray-600">Add your first medication to get started</p>
                 </div>
                 <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                   <DialogTrigger asChild>
-                    <Button className="bg-gradient-primary" onClick={resetForm}>
+                    <Button className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white" onClick={resetForm}>
                       <Plus className="h-4 w-4 mr-2" />
                       Add Your First Medication
                     </Button>

@@ -177,19 +177,19 @@ const MedicationScheduler = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-accent p-6">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-6">
       <div className="max-w-6xl mx-auto space-y-8">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-foreground">Medication Scheduler</h1>
-            <p className="text-muted-foreground">Manage your daily medication routine</p>
+            <h1 className="text-3xl font-bold text-gray-900">Medication Scheduler</h1>
+            <p className="text-gray-600">Manage your daily medication routine</p>
           </div>
           
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
               <Button 
-                className="bg-gradient-primary hover:shadow-glow transition-all duration-300"
+                className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-lg hover:shadow-xl transition-all duration-300"
                 onClick={resetForm}
               >
                 <Plus className="h-4 w-4 mr-2" />
@@ -294,7 +294,7 @@ const MedicationScheduler = () => {
                         variant={formData.days.includes(day.id) ? "default" : "outline"}
                         size="sm"
                         onClick={() => toggleDay(day.id)}
-                        className={formData.days.includes(day.id) ? "bg-primary" : ""}
+                        className={formData.days.includes(day.id) ? "bg-blue-600 text-white" : ""}
                       >
                         {day.label}
                       </Button>
@@ -325,7 +325,7 @@ const MedicationScheduler = () => {
                   <Label htmlFor="reminders">Enable reminders</Label>
                 </div>
 
-                <Button onClick={handleSubmit} className="w-full bg-gradient-primary">
+                <Button onClick={handleSubmit} className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white">
                   {editingMed ? "Update Medication" : "Add Medication"}
                 </Button>
               </div>
@@ -336,11 +336,11 @@ const MedicationScheduler = () => {
         {/* Medications List */}
         <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
           {medications.map((medication) => (
-            <Card key={medication.id} className="border-0 shadow-card hover:shadow-medical transition-all duration-300">
+            <Card key={medication.id} className="border-0 shadow-lg hover:shadow-xl transition-all duration-300 bg-white">
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-lg flex items-center space-x-2">
-                    <Pill className="h-5 w-5 text-primary" />
+                    <Pill className="h-5 w-5 text-blue-600" />
                     <span>{medication.name}</span>
                   </CardTitle>
                   <div className="flex space-x-1">
@@ -351,7 +351,7 @@ const MedicationScheduler = () => {
                       variant="ghost" 
                       size="icon" 
                       onClick={() => handleDelete(medication.id)}
-                      className="text-destructive hover:text-destructive"
+                      className="text-red-600 hover:text-red-700"
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
@@ -364,12 +364,12 @@ const MedicationScheduler = () => {
                   <Badge variant="outline">{medication.frequency} daily</Badge>
                 </div>
                 
-                <div className="flex items-center space-x-2 text-sm text-muted-foreground">
+                <div className="flex items-center space-x-2 text-sm text-gray-600">
                   <Clock className="h-4 w-4" />
                   <span>{medication.times.join(", ")}</span>
                 </div>
 
-                <div className="flex items-center space-x-2 text-sm text-muted-foreground">
+                <div className="flex items-center space-x-2 text-sm text-gray-600">
                   <Calendar className="h-4 w-4" />
                   <span>
                     {medication.startDate} {medication.endDate && `- ${medication.endDate}`}
@@ -387,19 +387,19 @@ const MedicationScheduler = () => {
                 )}
 
                 {medication.instructions && (
-                  <p className="text-sm text-muted-foreground bg-accent/50 p-2 rounded">
+                  <p className="text-sm text-gray-600 bg-gray-50 p-2 rounded">
                     {medication.instructions}
                   </p>
                 )}
 
                 <div className="flex items-center space-x-2">
                   {medication.reminders ? (
-                    <div className="flex items-center space-x-1 text-success">
+                    <div className="flex items-center space-x-1 text-green-600">
                       <Bell className="h-4 w-4" />
                       <span className="text-xs">Reminders enabled</span>
                     </div>
                   ) : (
-                    <div className="flex items-center space-x-1 text-muted-foreground">
+                    <div className="flex items-center space-x-1 text-gray-500">
                       <AlertTriangle className="h-4 w-4" />
                       <span className="text-xs">No reminders</span>
                     </div>
@@ -411,19 +411,19 @@ const MedicationScheduler = () => {
         </div>
 
         {medications.length === 0 && (
-          <Card className="border-0 shadow-card text-center py-12">
+          <Card className="border-0 shadow-lg text-center py-12 bg-white">
             <CardContent>
               <div className="flex flex-col items-center space-y-4">
-                <div className="p-4 bg-accent rounded-full">
-                  <Pill className="h-8 w-8 text-muted-foreground" />
+                <div className="p-4 bg-blue-100 rounded-full">
+                  <Pill className="h-8 w-8 text-blue-600" />
                 </div>
                 <div>
                   <h3 className="text-lg font-medium">No medications scheduled</h3>
-                  <p className="text-muted-foreground">Add your first medication to get started</p>
+                  <p className="text-gray-600">Add your first medication to get started</p>
                 </div>
                 <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                   <DialogTrigger asChild>
-                    <Button className="bg-gradient-primary" onClick={resetForm}>
+                    <Button className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white" onClick={resetForm}>
                       <Plus className="h-4 w-4 mr-2" />
                       Add Your First Medication
                     </Button>

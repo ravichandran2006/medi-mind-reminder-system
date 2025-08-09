@@ -183,19 +183,19 @@ const HealthLog = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-accent p-6">
+    <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-100 p-6">
       <div className="max-w-6xl mx-auto space-y-8">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-foreground">Health Log</h1>
-            <p className="text-muted-foreground">Track your vital signs and health metrics</p>
+            <h1 className="text-3xl font-bold text-gray-900">Health Log</h1>
+            <p className="text-gray-600">Track your vital signs and health metrics</p>
           </div>
           
           <div className="flex space-x-3">
             <Dialog open={isOCRDialogOpen} onOpenChange={setIsOCRDialogOpen}>
               <DialogTrigger asChild>
-                <Button variant="outline" className="hover:bg-accent">
+                <Button variant="outline" className="hover:bg-gray-100">
                   <Upload className="h-4 w-4 mr-2" />
                   Upload Prescription
                 </Button>
@@ -205,7 +205,7 @@ const HealthLog = () => {
                   <DialogTitle>Upload Prescription Image</DialogTitle>
                 </DialogHeader>
                 <div className="space-y-4">
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-sm text-gray-600">
                     Upload a prescription or medical report image. Our OCR system will extract health data automatically.
                   </p>
                   <Input
@@ -221,7 +221,7 @@ const HealthLog = () => {
             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
               <DialogTrigger asChild>
                 <Button 
-                  className="bg-gradient-primary hover:shadow-glow transition-all duration-300"
+                  className="bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700 text-white shadow-lg hover:shadow-xl transition-all duration-300"
                   onClick={resetForm}
                 >
                   <Plus className="h-4 w-4 mr-2" />
@@ -309,7 +309,7 @@ const HealthLog = () => {
                     />
                   </div>
 
-                  <Button onClick={handleSubmit} className="w-full bg-gradient-primary">
+                  <Button onClick={handleSubmit} className="w-full bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700 text-white">
                     Log Health Data
                   </Button>
                 </div>
@@ -321,36 +321,36 @@ const HealthLog = () => {
         {/* Stats Overview */}
         {healthData.length > 0 && (
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-            <Card className="border-0 shadow-card">
+            <Card className="border-0 shadow-lg bg-white">
               <CardContent className="p-6">
                 <div className="flex items-center space-x-2">
-                  <Scale className="h-8 w-8 text-primary" />
+                  <Scale className="h-8 w-8 text-blue-600" />
                   <div>
-                    <p className="text-sm font-medium text-muted-foreground">Latest Weight</p>
+                    <p className="text-sm font-medium text-gray-600">Latest Weight</p>
                     <p className="text-2xl font-bold">{healthData[0]?.weight} kg</p>
                   </div>
                 </div>
               </CardContent>
             </Card>
 
-            <Card className="border-0 shadow-card">
+            <Card className="border-0 shadow-lg bg-white">
               <CardContent className="p-6">
                 <div className="flex items-center space-x-2">
-                  <Heart className="h-8 w-8 text-destructive animate-pulse-medical" />
+                  <Heart className="h-8 w-8 text-red-600 animate-pulse" />
                   <div>
-                    <p className="text-sm font-medium text-muted-foreground">Heart Rate</p>
+                    <p className="text-sm font-medium text-gray-600">Heart Rate</p>
                     <p className="text-2xl font-bold">{healthData[0]?.heartRate} BPM</p>
                   </div>
                 </div>
               </CardContent>
             </Card>
 
-            <Card className="border-0 shadow-card">
+            <Card className="border-0 shadow-lg bg-white">
               <CardContent className="p-6">
                 <div className="flex items-center space-x-2">
-                  <Activity className="h-8 w-8 text-success" />
+                  <Activity className="h-8 w-8 text-green-600" />
                   <div>
-                    <p className="text-sm font-medium text-muted-foreground">Blood Pressure</p>
+                    <p className="text-sm font-medium text-gray-600">Blood Pressure</p>
                     <p className="text-2xl font-bold">
                       {healthData[0]?.bloodPressure.systolic}/{healthData[0]?.bloodPressure.diastolic}
                     </p>
@@ -359,12 +359,12 @@ const HealthLog = () => {
               </CardContent>
             </Card>
 
-            <Card className="border-0 shadow-card">
+            <Card className="border-0 shadow-lg bg-white">
               <CardContent className="p-6">
                 <div className="flex items-center space-x-2">
-                  <Thermometer className="h-8 w-8 text-warning" />
+                  <Thermometer className="h-8 w-8 text-orange-600" />
                   <div>
-                    <p className="text-sm font-medium text-muted-foreground">Temperature</p>
+                    <p className="text-sm font-medium text-gray-600">Temperature</p>
                     <p className="text-2xl font-bold">{healthData[0]?.temperature}°F</p>
                   </div>
                 </div>
@@ -376,7 +376,7 @@ const HealthLog = () => {
         {/* Export Button */}
         {healthData.length > 0 && (
           <div className="flex justify-end">
-            <Button onClick={exportData} variant="outline" className="hover:bg-accent">
+            <Button onClick={exportData} variant="outline" className="hover:bg-gray-100">
               <Download className="h-4 w-4 mr-2" />
               Export Data (CSV)
             </Button>
@@ -386,11 +386,11 @@ const HealthLog = () => {
         {/* Health Data List */}
         <div className="space-y-4">
           {healthData.map((data) => (
-            <Card key={data.id} className="border-0 shadow-card hover:shadow-medical transition-all duration-300">
+            <Card key={data.id} className="border-0 shadow-lg hover:shadow-xl transition-all duration-300 bg-white">
               <CardContent className="p-6">
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center space-x-2">
-                    <Calendar className="h-5 w-5 text-primary" />
+                    <Calendar className="h-5 w-5 text-blue-600" />
                     <span className="font-medium">{new Date(data.date).toLocaleDateString()}</span>
                   </div>
                   <div className="flex space-x-2">
@@ -399,37 +399,37 @@ const HealthLog = () => {
                 </div>
 
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div className="text-center p-3 bg-accent/50 rounded-lg">
-                    <Scale className="h-5 w-5 mx-auto mb-1 text-primary" />
-                    <p className="text-sm text-muted-foreground">Weight</p>
+                  <div className="text-center p-3 bg-gray-50 rounded-lg">
+                    <Scale className="h-5 w-5 mx-auto mb-1 text-blue-600" />
+                    <p className="text-sm text-gray-600">Weight</p>
                     <p className="font-semibold">{data.weight} kg</p>
                   </div>
 
-                  <div className="text-center p-3 bg-accent/50 rounded-lg">
-                    <Heart className="h-5 w-5 mx-auto mb-1 text-destructive" />
-                    <p className="text-sm text-muted-foreground">Heart Rate</p>
+                  <div className="text-center p-3 bg-gray-50 rounded-lg">
+                    <Heart className="h-5 w-5 mx-auto mb-1 text-red-600" />
+                    <p className="text-sm text-gray-600">Heart Rate</p>
                     <p className={`font-semibold ${getHealthStatus('heartRate', data.heartRate).color}`}>
                       {data.heartRate} BPM
                     </p>
                   </div>
 
-                  <div className="text-center p-3 bg-accent/50 rounded-lg">
-                    <Activity className="h-5 w-5 mx-auto mb-1 text-success" />
-                    <p className="text-sm text-muted-foreground">Blood Pressure</p>
+                  <div className="text-center p-3 bg-gray-50 rounded-lg">
+                    <Activity className="h-5 w-5 mx-auto mb-1 text-green-600" />
+                    <p className="text-sm text-gray-600">Blood Pressure</p>
                     <p className={`font-semibold ${getHealthStatus('systolic', data.bloodPressure.systolic).color}`}>
                       {data.bloodPressure.systolic}/{data.bloodPressure.diastolic}
                     </p>
                   </div>
 
-                  <div className="text-center p-3 bg-accent/50 rounded-lg">
-                    <Thermometer className="h-5 w-5 mx-auto mb-1 text-warning" />
-                    <p className="text-sm text-muted-foreground">Temperature</p>
+                  <div className="text-center p-3 bg-gray-50 rounded-lg">
+                    <Thermometer className="h-5 w-5 mx-auto mb-1 text-orange-600" />
+                    <p className="text-sm text-gray-600">Temperature</p>
                     <p className="font-semibold">{data.temperature}°F</p>
                   </div>
                 </div>
 
                 {data.notes && (
-                  <div className="mt-4 p-3 bg-muted/50 rounded-lg">
+                  <div className="mt-4 p-3 bg-gray-50 rounded-lg">
                     <p className="text-sm"><strong>Notes:</strong> {data.notes}</p>
                   </div>
                 )}
@@ -439,19 +439,19 @@ const HealthLog = () => {
         </div>
 
         {healthData.length === 0 && (
-          <Card className="border-0 shadow-card text-center py-12">
+          <Card className="border-0 shadow-lg text-center py-12 bg-white">
             <CardContent>
               <div className="flex flex-col items-center space-y-4">
-                <div className="p-4 bg-accent rounded-full">
-                  <Activity className="h-8 w-8 text-muted-foreground" />
+                <div className="p-4 bg-green-100 rounded-full">
+                  <Activity className="h-8 w-8 text-green-600" />
                 </div>
                 <div>
                   <h3 className="text-lg font-medium">No health data logged yet</h3>
-                  <p className="text-muted-foreground">Start tracking your health metrics</p>
+                  <p className="text-gray-600">Start tracking your health metrics</p>
                 </div>
                 <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                   <DialogTrigger asChild>
-                    <Button className="bg-gradient-primary" onClick={resetForm}>
+                    <Button className="bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700 text-white" onClick={resetForm}>
                       <Plus className="h-4 w-4 mr-2" />
                       Log Your First Entry
                     </Button>

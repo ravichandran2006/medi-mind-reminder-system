@@ -127,3 +127,61 @@
     @apply bg-background text-foreground;
   }
 }
+
+@layer components {
+  .bg-gradient-accent {
+    background: var(--gradient-accent);
+  }
+  
+  .bg-gradient-primary {
+    background: var(--gradient-primary);
+  }
+  
+  .shadow-medical {
+    box-shadow: var(--shadow-medical);
+  }
+  
+  .shadow-card {
+    box-shadow: var(--shadow-card);
+  }
+  
+  .shadow-glow {
+    box-shadow: var(--shadow-glow);
+  }
+  
+  .hover\:shadow-glow:hover {
+    box-shadow: var(--shadow-glow);
+  }
+  
+  .hover\:shadow-medical:hover {
+    box-shadow: var(--shadow-medical);
+  }
+  
+  .animate-pulse-medical {
+    animation: pulse-medical 2s ease-in-out infinite;
+  }
+  
+  .text-success {
+    color: hsl(var(--success));
+  }
+  
+  .text-warning {
+    color: hsl(var(--warning));
+  }
+  
+  .text-destructive {
+    color: hsl(var(--destructive));
+  }
+  
+  .bg-success {
+    background-color: hsl(var(--success));
+  }
+  
+  .bg-warning {
+    background-color: hsl(var(--warning));
+  }
+  
+  .bg-destructive {
+    background-color: hsl(var(--destructive));
+  }
+}

@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast.js";
-import { 
+import { useAuth } from "../contexts/AuthContext.jsx";
+import {
   Eye,
   EyeOff,
   Mail,
@@ -28,8 +29,13 @@ const Signup = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [otp, setOtp] = useState("");
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpVerified, setOtpVerified] = useState(false);
+
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { login } = useAuth();
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -39,91 +45,152 @@ const Signup = () => {
     }));
   };
 
-  const validateForm = () => {
-    if (!formData.firstName || !formData.lastName || !formData.email || 
-        !formData.phone || !formData.password || !formData.confirmPassword) {
+  // Send OTP
+  const handleSendOtp = async () => {
+    if (!formData.phone || formData.phone.length !== 13) {
+      toast({
+        title: "OTP Error",
+        description: "Enter a valid Indian mobile number (+91XXXXXXXXXX)",
+        variant: "destructive"
+      });
+      return;
+    }
+    setIsLoading(true);
+    try {
+      const response = await fetch("http://localhost:5001/api/send-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mobile: formData.phone.slice(3) }) // remove +91
+      });
+      const data = await response.json();
+      if (response.ok) {
+        setOtpSent(true);
+        toast({
+          title: "OTP Sent",
+          description: "OTP has been sent to your mobile number."
+        });
+      } else {
+        toast({
+          title: "OTP Error",
+          description: data.error || "Failed to send OTP",
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "OTP Error",
+        description: "Failed to send OTP",
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Verify OTP
+  const handleVerifyOtp = async () => {
+    if (!otp) {
+      toast({
+        title: "OTP Error",
+        description: "Enter the OTP received on your mobile",
+        variant: "destructive"
+      });
+      return;
+    }
+    setIsLoading(true);
+    try {
+      const response = await fetch("http://localhost:5001/api/verify-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mobile: formData.phone.slice(3), otp })
+      });
+      const data = await response.json();
+      if (response.ok && data.verified) {
+        setOtpVerified(true);
+        toast({
+          title: "Mobile Verified",
+          description: "Your mobile number has been verified."
+        });
+      } else {
+        toast({
+          title: "OTP Error",
+          description: data.error || "Invalid OTP",
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "OTP Error",
+        description: "Failed to verify OTP",
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Signup
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    // Basic validation
+    if (
+      !formData.firstName ||
+      !formData.lastName ||
+      !formData.email ||
+      !formData.phone ||
+      !formData.password ||
+      !formData.confirmPassword
+    ) {
       toast({
         title: "Validation Error",
         description: "Please fill in all fields",
         variant: "destructive"
       });
-      return false;
+      return;
     }
-
     if (formData.password !== formData.confirmPassword) {
       toast({
-        title: "Password Mismatch",
+        title: "Validation Error",
         description: "Passwords do not match",
         variant: "destructive"
       });
-      return false;
+      return;
     }
-
-    if (formData.password.length < 6) {
+    if (!otpVerified) {
       toast({
-        title: "Password Too Short",
-        description: "Password must be at least 6 characters long",
+        title: "Mobile Verification",
+        description: "Please verify your mobile number",
         variant: "destructive"
       });
-      return false;
-    }
-
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(formData.email)) {
-      toast({
-        title: "Invalid Email",
-        description: "Please enter a valid email address",
-        variant: "destructive"
-      });
-      return false;
-    }
-
-    return true;
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    
-    if (!validateForm()) {
       return;
     }
 
     setIsLoading(true);
 
     try {
-      const response = await fetch('http://localhost:5000/api/auth/signup', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          firstName: formData.firstName,
-          lastName: formData.lastName,
-          email: formData.email,
-          phone: formData.phone,
-          password: formData.password
-        }),
+      const response = await fetch("http://localhost:5001/api/auth/signup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(formData)
       });
-
       const data = await response.json();
 
       if (response.ok) {
+        login(data.user, data.token);
         toast({
-          title: "Account Created",
-          description: "Your account has been created successfully! Please sign in.",
+          title: "Signup Successful",
+          description: "Welcome to MediMate!"
         });
-
-        // Redirect to login page
-        navigate('/login');
+        navigate("/");
       } else {
         toast({
           title: "Signup Failed",
-          description: data.message || "Unable to create account",
+          description: data.message || "Validation failed",
           variant: "destructive"
         });
       }
     } catch (error) {
-      console.error('Signup error:', error);
       toast({
         title: "Connection Error",
         description: "Unable to connect to server. Please try again.",
@@ -212,21 +279,60 @@ const Signup = () => {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="phone">Phone Number</Label>
-                <div className="relative">
+                <Label htmlFor="phone">Phone Number (Indian only)</Label>
+                <div className="relative flex">
                   <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
                     id="phone"
                     name="phone"
                     type="tel"
-                    placeholder="Enter your phone number"
+                    placeholder="+91XXXXXXXXXX"
                     value={formData.phone}
                     onChange={handleInputChange}
                     className="pl-10"
                     required
+                    maxLength={13}
+                    disabled={otpSent}
                   />
+                  <Button
+                    type="button"
+                    className="ml-2"
+                    onClick={handleSendOtp}
+                    disabled={otpSent || !formData.phone || formData.phone.length !== 13}
+                  >
+                    {otpSent ? "OTP Sent" : "Send OTP"}
+                  </Button>
                 </div>
               </div>
+
+              {otpSent && !otpVerified && (
+                <div className="space-y-2">
+                  <Label htmlFor="otp">Enter OTP</Label>
+                  <div className="flex">
+                    <Input
+                      id="otp"
+                      name="otp"
+                      type="text"
+                      placeholder="Enter OTP"
+                      value={otp}
+                      onChange={e => setOtp(e.target.value)}
+                      className="pl-10"
+                      required
+                    />
+                    <Button
+                      type="button"
+                      className="ml-2"
+                      onClick={handleVerifyOtp}
+                      disabled={otpVerified}
+                    >
+                      Verify OTP
+                    </Button>
+                  </div>
+                </div>
+              )}
+              {otpVerified && (
+                <div className="text-green-600 text-sm mb-2">Mobile number verified!</div>
+              )}
 
               <div className="space-y-2">
                 <Label htmlFor="password">Password</Label>
@@ -322,4 +428,4 @@ const Signup = () => {
   );
 };
 
-export default Signup; 
+export default Signup;

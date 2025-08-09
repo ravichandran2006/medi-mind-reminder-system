@@ -1,22 +1,41 @@
+// server.js
 const express = require('express');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { body, validationResult } = require('express-validator');
+const mongoose = require('mongoose');
 require('dotenv').config();
 
+// Import SMS and notification services
+const smsRoutes = require('./routes/sms');
+const NotificationScheduler = require('./notificationScheduler');
+
+// Import OTP routes
+const otpRoutes = require('./routes/otp');
+
+const notificationScheduler = new NotificationScheduler();
+
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5001;
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
+
+// Connect to MongoDB
+mongoose.connect(process.env.MONGODB_URI, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+}).then(() => {
+  console.log('✅ Connected to MongoDB');
+}).catch((err) => {
+  console.error('❌ MongoDB connection error:', err.message);
+});
 
 // Middleware
 app.use(cors());
 app.use(express.json());
 
-// In-memory storage (replace with database in production)
-let users = [];
-let medications = [];
-let healthData = [];
+// Import models
+const User = require('./models/User');
 
 // JWT Middleware
 const authenticateToken = (req, res, next) => {
@@ -36,12 +55,29 @@ const authenticateToken = (req, res, next) => {
   });
 };
 
+// Helper: normalize Indian phone to +91XXXXXXXXXX
+function formatIndianPhone(raw) {
+  if (!raw) return null;
+  // remove non-digit characters
+  const digits = raw.replace(/\D/g, '');
+  // if already has country code (91 + 10 digits)
+  if (digits.length === 12 && digits.startsWith('91')) {
+    return `+${digits}`;
+  }
+  // if just 10 digits
+  if (digits.length === 10) {
+    return `+91${digits}`;
+  }
+  // otherwise return null to indicate invalid
+  return null;
+}
+
 // Validation middleware
 const validateSignup = [
   body('firstName').trim().isLength({ min: 2 }).withMessage('First name must be at least 2 characters'),
   body('lastName').trim().isLength({ min: 2 }).withMessage('Last name must be at least 2 characters'),
   body('email').isEmail().normalizeEmail().withMessage('Valid email is required'),
-  body('phone').trim().isLength({ min: 10 }).withMessage('Valid phone number is required'),
+  body('phone').trim().notEmpty().withMessage('Phone number is required'),
   body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters')
 ];
 
@@ -57,50 +93,66 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', message: 'MediMate API is running' });
 });
 
+// OTP routes for mobile verification
+app.use('/api', otpRoutes);
+
 // Signup
 app.post('/api/auth/signup', validateSignup, async (req, res) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(400).json({ 
-        message: 'Validation failed', 
-        errors: errors.array() 
+      console.log('❌ Signup validation errors:', errors.array());
+      return res.status(400).json({
+        message: 'Validation failed',
+        errors: errors.array()
       });
     }
 
-    const { firstName, lastName, email, phone, password } = req.body;
+    let { firstName, lastName, email, phone, password } = req.body;
 
-    // Check if user already exists
-    const existingUser = users.find(user => user.email === email);
-    if (existingUser) {
+    // Normalize and validate phone
+    const formattedPhone = formatIndianPhone(phone);
+    if (!formattedPhone) {
+      return res.status(400).json({ message: 'Phone must be a valid Indian number (10 digits or +91XXXXXXXXXX)' });
+    }
+
+    // Trim other fields
+    firstName = firstName.trim();
+    lastName = lastName.trim();
+    email = email.trim().toLowerCase();
+
+    // Check duplicates by email and phone
+    const existingByEmail = await User.findOne({ email });
+    if (existingByEmail) {
       return res.status(400).json({ message: 'User with this email already exists' });
+    }
+
+    const existingByPhone = await User.findOne({ phone: formattedPhone });
+    if (existingByPhone) {
+      return res.status(400).json({ message: 'User with this phone number already exists' });
     }
 
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 12);
 
     // Create user
-    const newUser = {
-      id: Date.now().toString(),
+    const newUser = await User.create({
       firstName,
       lastName,
       email,
-      phone,
-      password: hashedPassword,
-      createdAt: new Date().toISOString()
-    };
-
-    users.push(newUser);
+      phone: formattedPhone,
+      password: hashedPassword
+    });
 
     // Create token
     const token = jwt.sign(
-      { userId: newUser.id, email: newUser.email },
+      { userId: newUser._id, email: newUser.email },
       JWT_SECRET,
       { expiresIn: '7d' }
     );
 
     // Return user data (without password) and token
-    const { password: _, ...userWithoutPassword } = newUser;
+    const { password: _, ...userWithoutPassword } = newUser.toObject();
     res.status(201).json({
       message: 'User created successfully',
       user: userWithoutPassword,
@@ -108,7 +160,14 @@ app.post('/api/auth/signup', validateSignup, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Signup error:', error);
+    // Handle duplicate key errors from MongoDB if any slip through
+    if (error && error.code === 11000) {
+      const dupField = Object.keys(error.keyPattern || {}).join(', ') || 'field';
+      console.error('Duplicate key error on signup:', error.keyValue || error.message);
+      return res.status(400).json({ message: `Duplicate value for ${dupField}` });
+    }
+
+    console.error('Signup error:', error && error.stack ? error.stack : error);
     res.status(500).json({ message: 'Internal server error' });
   }
 });
@@ -118,16 +177,17 @@ app.post('/api/auth/login', validateLogin, async (req, res) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(400).json({ 
-        message: 'Validation failed', 
-        errors: errors.array() 
+      console.log('❌ Login validation errors:', errors.array());
+      return res.status(400).json({
+        message: 'Validation failed',
+        errors: errors.array()
       });
     }
 
     const { email, password } = req.body;
 
     // Find user
-    const user = users.find(user => user.email === email);
+    const user = await User.findOne({ email });
     if (!user) {
       return res.status(401).json({ message: 'Invalid credentials' });
     }
@@ -140,13 +200,13 @@ app.post('/api/auth/login', validateLogin, async (req, res) => {
 
     // Create token
     const token = jwt.sign(
-      { userId: user.id, email: user.email },
+      { userId: user._id, email: user.email },
       JWT_SECRET,
       { expiresIn: '7d' }
     );
 
     // Return user data (without password) and token
-    const { password: _, ...userWithoutPassword } = user;
+    const { password: _, ...userWithoutPassword } = user.toObject();
     res.json({
       message: 'Login successful',
       user: userWithoutPassword,
@@ -154,138 +214,33 @@ app.post('/api/auth/login', validateLogin, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Login error:', error);
+    console.error('Login error:', error && error.stack ? error.stack : error);
     res.status(500).json({ message: 'Internal server error' });
   }
 });
 
 // Get user profile
-app.get('/api/user/profile', authenticateToken, (req, res) => {
+app.get('/api/user/profile', authenticateToken, async (req, res) => {
   try {
-    const user = users.find(user => user.id === req.user.userId);
+    const user = await User.findById(req.user.userId);
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    const { password: _, ...userWithoutPassword } = user;
+    const { password: _, ...userWithoutPassword } = user.toObject();
     res.json({ user: userWithoutPassword });
   } catch (error) {
-    console.error('Get profile error:', error);
+    console.error('Get profile error:', error && error.stack ? error.stack : error);
     res.status(500).json({ message: 'Internal server error' });
   }
 });
 
-// Medications API
-app.get('/api/medications', authenticateToken, (req, res) => {
-  try {
-    const userMedications = medications.filter(med => med.userId === req.user.userId);
-    res.json({ medications: userMedications });
-  } catch (error) {
-    console.error('Get medications error:', error);
-    res.status(500).json({ message: 'Internal server error' });
-  }
-});
-
-app.post('/api/medications', authenticateToken, (req, res) => {
-  try {
-    const newMedication = {
-      id: Date.now().toString(),
-      userId: req.user.userId,
-      ...req.body,
-      createdAt: new Date().toISOString()
-    };
-    
-    medications.push(newMedication);
-    res.status(201).json({ 
-      message: 'Medication added successfully',
-      medication: newMedication 
-    });
-  } catch (error) {
-    console.error('Add medication error:', error);
-    res.status(500).json({ message: 'Internal server error' });
-  }
-});
-
-app.put('/api/medications/:id', authenticateToken, (req, res) => {
-  try {
-    const { id } = req.params;
-    const medicationIndex = medications.findIndex(
-      med => med.id === id && med.userId === req.user.userId
-    );
-
-    if (medicationIndex === -1) {
-      return res.status(404).json({ message: 'Medication not found' });
-    }
-
-    medications[medicationIndex] = {
-      ...medications[medicationIndex],
-      ...req.body,
-      updatedAt: new Date().toISOString()
-    };
-
-    res.json({ 
-      message: 'Medication updated successfully',
-      medication: medications[medicationIndex] 
-    });
-  } catch (error) {
-    console.error('Update medication error:', error);
-    res.status(500).json({ message: 'Internal server error' });
-  }
-});
-
-app.delete('/api/medications/:id', authenticateToken, (req, res) => {
-  try {
-    const { id } = req.params;
-    const medicationIndex = medications.findIndex(
-      med => med.id === id && med.userId === req.user.userId
-    );
-
-    if (medicationIndex === -1) {
-      return res.status(404).json({ message: 'Medication not found' });
-    }
-
-    medications.splice(medicationIndex, 1);
-    res.json({ message: 'Medication deleted successfully' });
-  } catch (error) {
-    console.error('Delete medication error:', error);
-    res.status(500).json({ message: 'Internal server error' });
-  }
-});
-
-// Health Data API
-app.get('/api/health-data', authenticateToken, (req, res) => {
-  try {
-    const userHealthData = healthData.filter(data => data.userId === req.user.userId);
-    res.json({ healthData: userHealthData });
-  } catch (error) {
-    console.error('Get health data error:', error);
-    res.status(500).json({ message: 'Internal server error' });
-  }
-});
-
-app.post('/api/health-data', authenticateToken, (req, res) => {
-  try {
-    const newHealthData = {
-      id: Date.now().toString(),
-      userId: req.user.userId,
-      ...req.body,
-      createdAt: new Date().toISOString()
-    };
-    
-    healthData.push(newHealthData);
-    res.status(201).json({ 
-      message: 'Health data added successfully',
-      healthData: newHealthData 
-    });
-  } catch (error) {
-    console.error('Add health data error:', error);
-    res.status(500).json({ message: 'Internal server error' });
-  }
-});
+// SMS Routes
+app.use('/api/sms', smsRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
-  console.error(err.stack);
+  console.error('Unhandled error middleware:', err && err.stack ? err.stack : err);
   res.status(500).json({ message: 'Something went wrong!' });
 });
 
@@ -295,7 +250,16 @@ app.use('*', (req, res) => {
 });
 
 // Start server
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log(`🚀 MediMate Backend Server running on port ${PORT}`);
   console.log(`📊 Health check: http://localhost:${PORT}/api/health`);
-}); 
+
+  // Initialize notification scheduler with data references
+  try {
+    notificationScheduler.setData([], []);
+    await notificationScheduler.initializeNotifications();
+    console.log('✅ Notification scheduler initialized successfully');
+  } catch (error) {
+    console.error('❌ Error initializing notification scheduler:', error);
+  }
+});

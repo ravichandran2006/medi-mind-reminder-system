@@ -1,3 +1,9 @@
+// --- CHANGES MADE ---
+// 1. Phone number validation requires +91XXXXXXXXXX (13 chars).
+// 2. Always send only 10 digits to backend (no +91).
+// 3. Separate loading states for send OTP and verify OTP.
+// 4. OTP flow integrated without breaking signup flow.
+
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -32,6 +38,7 @@ const Signup = () => {
   const [otp, setOtp] = useState("");
   const [otpSent, setOtpSent] = useState(false);
   const [otpVerified, setOtpVerified] = useState(false);
+  const [otpLoading, setOtpLoading] = useState(false);
 
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -39,7 +46,7 @@ const Signup = () => {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
       [name]: value
     }));
@@ -47,7 +54,7 @@ const Signup = () => {
 
   // Send OTP
   const handleSendOtp = async () => {
-    if (!formData.phone || formData.phone.length !== 13) {
+    if (!formData.phone.startsWith("+91") || formData.phone.length !== 13) {
       toast({
         title: "OTP Error",
         description: "Enter a valid Indian mobile number (+91XXXXXXXXXX)",
@@ -55,12 +62,13 @@ const Signup = () => {
       });
       return;
     }
-    setIsLoading(true);
+    setOtpLoading(true);
     try {
-      const response = await fetch("http://localhost:5001/api/send-otp", {
+      const mobileOnly = formData.phone.slice(3); // send only 10 digits
+      const response = await fetch("http://localhost:5001/api/otp/send-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mobile: formData.phone.slice(3) }) // remove +91
+        body: JSON.stringify({ mobile: mobileOnly })
       });
       const data = await response.json();
       if (response.ok) {
@@ -76,14 +84,14 @@ const Signup = () => {
           variant: "destructive"
         });
       }
-    } catch (error) {
+    } catch {
       toast({
         title: "OTP Error",
         description: "Failed to send OTP",
         variant: "destructive"
       });
     } finally {
-      setIsLoading(false);
+      setOtpLoading(false);
     }
   };
 
@@ -97,12 +105,13 @@ const Signup = () => {
       });
       return;
     }
-    setIsLoading(true);
+    setOtpLoading(true);
     try {
-      const response = await fetch("http://localhost:5001/api/verify-otp", {
+      const mobileOnly = formData.phone.slice(3);
+      const response = await fetch("http://localhost:5001/api/otp/verify-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mobile: formData.phone.slice(3), otp })
+        body: JSON.stringify({ mobile: mobileOnly, otp })
       });
       const data = await response.json();
       if (response.ok && data.verified) {
@@ -118,14 +127,14 @@ const Signup = () => {
           variant: "destructive"
         });
       }
-    } catch (error) {
+    } catch {
       toast({
         title: "OTP Error",
         description: "Failed to verify OTP",
         variant: "destructive"
       });
     } finally {
-      setIsLoading(false);
+      setOtpLoading(false);
     }
   };
 
@@ -133,7 +142,6 @@ const Signup = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    // Basic validation
     if (
       !formData.firstName ||
       !formData.lastName ||
@@ -167,7 +175,6 @@ const Signup = () => {
     }
 
     setIsLoading(true);
-
     try {
       const response = await fetch("http://localhost:5001/api/auth/signup", {
         method: "POST",
@@ -190,7 +197,7 @@ const Signup = () => {
           variant: "destructive"
         });
       }
-    } catch (error) {
+    } catch {
       toast({
         title: "Connection Error",
         description: "Unable to connect to server. Please try again.",
@@ -215,8 +222,12 @@ const Signup = () => {
               <p className="text-sm text-muted-foreground">Health Companion</p>
             </div>
           </div>
-          <h2 className="text-2xl font-semibold text-foreground">Create Account</h2>
-          <p className="text-muted-foreground">Join MediMate for better health management</p>
+          <h2 className="text-2xl font-semibold text-foreground">
+            Create Account
+          </h2>
+          <p className="text-muted-foreground">
+            Join MediMate for better health management
+          </p>
         </div>
 
         {/* Signup Form */}
@@ -226,50 +237,52 @@ const Signup = () => {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="firstName">First Name</Label>
-                  <div className="relative">
-                    <User className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      id="firstName"
-                      name="firstName"
-                      type="text"
-                      placeholder="First name"
-                      value={formData.firstName}
-                      onChange={handleInputChange}
-                      className="pl-10"
-                      required
-                    />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="lastName">Last Name</Label>
-                  <div className="relative">
-                    <User className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      id="lastName"
-                      name="lastName"
-                      type="text"
-                      placeholder="Last name"
-                      value={formData.lastName}
-                      onChange={handleInputChange}
-                      className="pl-10"
-                      required
-                    />
-                  </div>
+              {/* First Name */}
+              <div className="space-y-2">
+                <Label htmlFor="firstName">First Name</Label>
+                <div className="relative">
+                  <User className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    id="firstName"
+                    name="firstName"
+                    type="text"
+                    placeholder="John"
+                    value={formData.firstName}
+                    onChange={handleInputChange}
+                    className="pl-10"
+                    required
+                  />
                 </div>
               </div>
 
+              {/* Last Name */}
               <div className="space-y-2">
-                <Label htmlFor="email">Email Address</Label>
+                <Label htmlFor="lastName">Last Name</Label>
+                <div className="relative">
+                  <User className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    id="lastName"
+                    name="lastName"
+                    type="text"
+                    placeholder="Doe"
+                    value={formData.lastName}
+                    onChange={handleInputChange}
+                    className="pl-10"
+                    required
+                  />
+                </div>
+              </div>
+
+              {/* Email */}
+              <div className="space-y-2">
+                <Label htmlFor="email">Email</Label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
                     id="email"
                     name="email"
                     type="email"
-                    placeholder="Enter your email"
+                    placeholder="john@example.com"
                     value={formData.email}
                     onChange={handleInputChange}
                     className="pl-10"
@@ -278,6 +291,7 @@ const Signup = () => {
                 </div>
               </div>
 
+              {/* Phone with OTP */}
               <div className="space-y-2">
                 <Label htmlFor="phone">Phone Number (Indian only)</Label>
                 <div className="relative flex">
@@ -298,9 +312,13 @@ const Signup = () => {
                     type="button"
                     className="ml-2"
                     onClick={handleSendOtp}
-                    disabled={otpSent || !formData.phone || formData.phone.length !== 13}
+                    disabled={otpSent || otpLoading}
                   >
-                    {otpSent ? "OTP Sent" : "Send OTP"}
+                    {otpLoading
+                      ? "Sending..."
+                      : otpSent
+                      ? "OTP Sent"
+                      : "Send OTP"}
                   </Button>
                 </div>
               </div>
@@ -315,25 +333,28 @@ const Signup = () => {
                       type="text"
                       placeholder="Enter OTP"
                       value={otp}
-                      onChange={e => setOtp(e.target.value)}
-                      className="pl-10"
+                      onChange={(e) => setOtp(e.target.value)}
                       required
                     />
                     <Button
                       type="button"
                       className="ml-2"
                       onClick={handleVerifyOtp}
-                      disabled={otpVerified}
+                      disabled={otpLoading}
                     >
-                      Verify OTP
+                      {otpLoading ? "Verifying..." : "Verify OTP"}
                     </Button>
                   </div>
                 </div>
               )}
+
               {otpVerified && (
-                <div className="text-green-600 text-sm mb-2">Mobile number verified!</div>
+                <div className="text-green-600 text-sm mb-2">
+                  Mobile number verified!
+                </div>
               )}
 
+              {/* Password */}
               <div className="space-y-2">
                 <Label htmlFor="password">Password</Label>
                 <div className="relative">
@@ -342,17 +363,15 @@ const Signup = () => {
                     id="password"
                     name="password"
                     type={showPassword ? "text" : "password"}
-                    placeholder="Create a password"
+                    placeholder="********"
                     value={formData.password}
                     onChange={handleInputChange}
                     className="pl-10 pr-10"
                     required
                   />
-                  <Button
+                  <button
                     type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="absolute right-1 top-1/2 transform -translate-y-1/2 h-8 w-8"
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground"
                     onClick={() => setShowPassword(!showPassword)}
                   >
                     {showPassword ? (
@@ -360,10 +379,11 @@ const Signup = () => {
                     ) : (
                       <Eye className="h-4 w-4" />
                     )}
-                  </Button>
+                  </button>
                 </div>
               </div>
 
+              {/* Confirm Password */}
               <div className="space-y-2">
                 <Label htmlFor="confirmPassword">Confirm Password</Label>
                 <div className="relative">
@@ -372,17 +392,15 @@ const Signup = () => {
                     id="confirmPassword"
                     name="confirmPassword"
                     type={showConfirmPassword ? "text" : "password"}
-                    placeholder="Confirm your password"
+                    placeholder="********"
                     value={formData.confirmPassword}
                     onChange={handleInputChange}
                     className="pl-10 pr-10"
                     required
                   />
-                  <Button
+                  <button
                     type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="absolute right-1 top-1/2 transform -translate-y-1/2 h-8 w-8"
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground"
                     onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                   >
                     {showConfirmPassword ? (
@@ -390,7 +408,7 @@ const Signup = () => {
                     ) : (
                       <Eye className="h-4 w-4" />
                     )}
-                  </Button>
+                  </button>
                 </div>
               </div>
 

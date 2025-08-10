@@ -2,48 +2,69 @@ const express = require('express');
 const router = express.Router();
 const twilio = require('twilio');
 
+// Debug log to confirm route is loaded
+console.log("✅ OTP routes loaded");
+
 // Twilio credentials from environment variables
 const accountSid = process.env.TWILIO_ACCOUNT_SID;
 const authToken = process.env.TWILIO_AUTH_TOKEN;
-const verifySid = process.env.TWILIO_VERIFY_SID; // You must add this to your .env file!
+const verifySid = process.env.TWILIO_VERIFY_SID; // Add this to your .env file
 
+// Twilio client
 const client = twilio(accountSid, authToken);
 
 // Send OTP to Indian mobile number
 router.post('/send-otp', async (req, res) => {
   const { mobile } = req.body;
-  if (!mobile || mobile.length !== 10) {
+
+  // Validate: must be exactly 10 digits, numeric only
+  if (!mobile || !/^\d{10}$/.test(mobile)) {
     return res.status(400).json({ error: 'Valid 10-digit mobile number required' });
   }
 
   try {
     const fullMobile = `+91${mobile}`;
-    await client.verify.v2.services(verifySid)
+    const verification = await client.verify.v2
+      .services(verifySid)
       .verifications.create({ to: fullMobile, channel: 'sms' });
-    res.json({ message: 'OTP sent' });
+
+    res.json({
+      success: true,
+      message: 'OTP sent successfully',
+      sid: verification.sid
+    });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to send OTP', details: err.message });
+    console.error("❌ OTP Send Error:", err.message);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to send OTP',
+      details: err.message
+    });
   }
 });
+
 
 // Verify OTP
 router.post('/verify-otp', async (req, res) => {
   const { mobile, otp } = req.body;
+  
   if (!mobile || !otp) {
     return res.status(400).json({ error: 'Mobile and OTP required' });
   }
 
   try {
     const fullMobile = `+91${mobile}`;
-    const verification = await client.verify.v2.services(verifySid)
+    const verificationCheck = await client.verify.v2.services(verifySid)
       .verificationChecks.create({ to: fullMobile, code: otp });
-    if (verification.status === 'approved') {
-      res.json({ verified: true });
+
+    if (verificationCheck.status === 'approved') {
+      res.json({ success: true, verified: true });
     } else {
-      res.status(400).json({ verified: false, error: 'Invalid OTP' });
+      res.status(400).json({ success: false, verified: false, error: 'Invalid OTP' });
     }
   } catch (err) {
-    res.status(500).json({ error: 'Verification failed', details: err.message });
+    console.error("❌ OTP Verify Error:", err.message);
+    res.status(500).json({ success: false, error: 'Verification failed', details: err.message });
   }
 });
 

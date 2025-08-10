@@ -7,13 +7,12 @@ const { body, validationResult } = require('express-validator');
 const mongoose = require('mongoose');
 require('dotenv').config();
 
-// Import SMS and notification services
+// Import services and routes
 const smsRoutes = require('./routes/sms');
+const otpRoutes = require('./routes/otp'); // ✅ OTP route
 const NotificationScheduler = require('./notificationScheduler');
 
-// Import OTP routes
-const otpRoutes = require('./routes/otp');
-
+// Initialize notification scheduler
 const notificationScheduler = new NotificationScheduler();
 
 const app = express();
@@ -30,8 +29,17 @@ mongoose.connect(process.env.MONGODB_URI, {
   console.error('❌ MongoDB connection error:', err.message);
 });
 
+// ✅ Fixed CORS
+const corsOptions = {
+  origin: ['http://localhost:3000', 'http://localhost:8080'], // allow both
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
+};
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions)); // Handle preflight
+
 // Middleware
-app.use(cors());
 app.use(express.json());
 
 // Import models
@@ -41,11 +49,9 @@ const User = require('./models/User');
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
-
   if (!token) {
     return res.status(401).json({ message: 'Access token required' });
   }
-
   jwt.verify(token, JWT_SECRET, (err, user) => {
     if (err) {
       return res.status(403).json({ message: 'Invalid or expired token' });
@@ -58,17 +64,13 @@ const authenticateToken = (req, res, next) => {
 // Helper: normalize Indian phone to +91XXXXXXXXXX
 function formatIndianPhone(raw) {
   if (!raw) return null;
-  // remove non-digit characters
   const digits = raw.replace(/\D/g, '');
-  // if already has country code (91 + 10 digits)
   if (digits.length === 12 && digits.startsWith('91')) {
     return `+${digits}`;
   }
-  // if just 10 digits
   if (digits.length === 10) {
     return `+91${digits}`;
   }
-  // otherwise return null to indicate invalid
   return null;
 }
 
@@ -87,41 +89,32 @@ const validateLogin = [
 ];
 
 // Routes
-
-// Health check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', message: 'MediMate API is running' });
 });
 
-// OTP routes for mobile verification
-app.use('/api', otpRoutes);
+// ✅ OTP routes mounted under /api/otp
+app.use('/api/otp', otpRoutes);
 
-// Signup
+// Signup route
 app.post('/api/auth/signup', validateSignup, async (req, res) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       console.log('❌ Signup validation errors:', errors.array());
-      return res.status(400).json({
-        message: 'Validation failed',
-        errors: errors.array()
-      });
+      return res.status(400).json({ message: 'Validation failed', errors: errors.array() });
     }
 
     let { firstName, lastName, email, phone, password } = req.body;
-
-    // Normalize and validate phone
     const formattedPhone = formatIndianPhone(phone);
     if (!formattedPhone) {
       return res.status(400).json({ message: 'Phone must be a valid Indian number (10 digits or +91XXXXXXXXXX)' });
     }
 
-    // Trim other fields
     firstName = firstName.trim();
     lastName = lastName.trim();
     email = email.trim().toLowerCase();
 
-    // Check duplicates by email and phone
     const existingByEmail = await User.findOne({ email });
     if (existingByEmail) {
       return res.status(400).json({ message: 'User with this email already exists' });
@@ -132,10 +125,8 @@ app.post('/api/auth/signup', validateSignup, async (req, res) => {
       return res.status(400).json({ message: 'User with this phone number already exists' });
     }
 
-    // Hash password
     const hashedPassword = await bcrypt.hash(password, 12);
 
-    // Create user
     const newUser = await User.create({
       firstName,
       lastName,
@@ -144,14 +135,12 @@ app.post('/api/auth/signup', validateSignup, async (req, res) => {
       password: hashedPassword
     });
 
-    // Create token
     const token = jwt.sign(
       { userId: newUser._id, email: newUser.email },
       JWT_SECRET,
       { expiresIn: '7d' }
     );
 
-    // Return user data (without password) and token
     const { password: _, ...userWithoutPassword } = newUser.toObject();
     res.status(201).json({
       message: 'User created successfully',
@@ -160,87 +149,67 @@ app.post('/api/auth/signup', validateSignup, async (req, res) => {
     });
 
   } catch (error) {
-    // Handle duplicate key errors from MongoDB if any slip through
     if (error && error.code === 11000) {
       const dupField = Object.keys(error.keyPattern || {}).join(', ') || 'field';
       console.error('Duplicate key error on signup:', error.keyValue || error.message);
       return res.status(400).json({ message: `Duplicate value for ${dupField}` });
     }
-
-    console.error('Signup error:', error && error.stack ? error.stack : error);
+    console.error('Signup error:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
 });
 
-// Login
+// Login route
 app.post('/api/auth/login', validateLogin, async (req, res) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       console.log('❌ Login validation errors:', errors.array());
-      return res.status(400).json({
-        message: 'Validation failed',
-        errors: errors.array()
-      });
+      return res.status(400).json({ message: 'Validation failed', errors: errors.array() });
     }
 
     const { email, password } = req.body;
-
-    // Find user
     const user = await User.findOne({ email });
-    if (!user) {
-      return res.status(401).json({ message: 'Invalid credentials' });
-    }
+    if (!user) return res.status(401).json({ message: 'Invalid credentials' });
 
-    // Check password
     const isValidPassword = await bcrypt.compare(password, user.password);
-    if (!isValidPassword) {
-      return res.status(401).json({ message: 'Invalid credentials' });
-    }
+    if (!isValidPassword) return res.status(401).json({ message: 'Invalid credentials' });
 
-    // Create token
     const token = jwt.sign(
       { userId: user._id, email: user.email },
       JWT_SECRET,
       { expiresIn: '7d' }
     );
 
-    // Return user data (without password) and token
     const { password: _, ...userWithoutPassword } = user.toObject();
-    res.json({
-      message: 'Login successful',
-      user: userWithoutPassword,
-      token
-    });
+    res.json({ message: 'Login successful', user: userWithoutPassword, token });
 
   } catch (error) {
-    console.error('Login error:', error && error.stack ? error.stack : error);
+    console.error('Login error:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
 });
 
-// Get user profile
+// User profile route
 app.get('/api/user/profile', authenticateToken, async (req, res) => {
   try {
     const user = await User.findById(req.user.userId);
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
-    }
+    if (!user) return res.status(404).json({ message: 'User not found' });
 
     const { password: _, ...userWithoutPassword } = user.toObject();
     res.json({ user: userWithoutPassword });
   } catch (error) {
-    console.error('Get profile error:', error && error.stack ? error.stack : error);
+    console.error('Get profile error:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
 });
 
-// SMS Routes
+// SMS routes
 app.use('/api/sms', smsRoutes);
 
-// Error handling middleware
+// Error handler
 app.use((err, req, res, next) => {
-  console.error('Unhandled error middleware:', err && err.stack ? err.stack : err);
+  console.error('Unhandled error middleware:', err);
   res.status(500).json({ message: 'Something went wrong!' });
 });
 
@@ -254,7 +223,6 @@ app.listen(PORT, async () => {
   console.log(`🚀 MediMate Backend Server running on port ${PORT}`);
   console.log(`📊 Health check: http://localhost:${PORT}/api/health`);
 
-  // Initialize notification scheduler with data references
   try {
     notificationScheduler.setData([], []);
     await notificationScheduler.initializeNotifications();

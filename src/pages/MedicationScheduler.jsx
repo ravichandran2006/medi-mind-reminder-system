@@ -48,11 +48,14 @@ const MedicationScheduler = () => {
     endDate: "",
     days: [],
     instructions: "",
-    reminders: true
+    reminders: true,
+    tabletColor: "",
+    tabletSize: "",
+    tabletAppearance: ""
   });
 
   // API URL with fallback
-  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001/api';
 
   useEffect(() => {
     loadMedications();
@@ -68,8 +71,8 @@ const MedicationScheduler = () => {
         return;
       }
 
-      // Load from backend
-      const response = await fetch(`${API_URL}/medications`, {
+      // Load from backend using new medication form API
+      const response = await fetch(`${API_URL}/medication-form`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -118,10 +121,10 @@ const MedicationScheduler = () => {
   };
 
   const handleSubmit = async () => {
-    if (!formData.name || !formData.dosage || formData.times.length === 0) {
+    if (!formData.name || !formData.dosage || formData.times.length === 0 || !formData.tabletColor || !formData.tabletSize || !formData.tabletAppearance) {
       toast({
         title: "Validation Error",
-        description: "Please fill in all required fields",
+        description: "Please fill in all required fields including tablet appearance details",
         variant: "destructive"
       });
       return;
@@ -140,7 +143,10 @@ const MedicationScheduler = () => {
         endDate: formData.endDate,
         days: formData.days,
         instructions: formData.instructions,
-        reminders: formData.reminders
+        reminders: formData.reminders,
+        tabletColor: formData.tabletColor,
+        tabletSize: formData.tabletSize,
+        tabletAppearance: formData.tabletAppearance
       };
 
       const token = localStorage.getItem('token');
@@ -150,7 +156,7 @@ const MedicationScheduler = () => {
         try {
           if (editingMed) {
             // Update existing medication
-            const response = await fetch(`${API_URL}/medications/${editingMed.id}`, {
+            const response = await fetch(`${API_URL}/medication-form/${editingMed._id || editingMed.id}`, {
               method: 'PUT',
               headers: {
                 'Content-Type': 'application/json',
@@ -165,7 +171,7 @@ const MedicationScheduler = () => {
             }
           } else {
             // Create new medication
-            const response = await fetch(`${API_URL}/medications`, {
+            const response = await fetch(`${API_URL}/medication-form`, {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
@@ -180,8 +186,8 @@ const MedicationScheduler = () => {
             }
 
             const result = await response.json();
-            if (result.medication && result.medication.id) {
-              newMedication.id = result.medication.id; // Use backend-generated ID
+            if (result.medication && result.medication._id) {
+              newMedication._id = result.medication._id; // Use backend-generated ID
             }
           }
         } catch (backendError) {
@@ -197,7 +203,7 @@ const MedicationScheduler = () => {
 
       // Always update local storage
       const updatedMedications = editingMed
-        ? medications.map(med => med.id === editingMed.id ? newMedication : med)
+        ? medications.map(med => (med._id || med.id) === (editingMed._id || editingMed.id) ? newMedication : med)
         : [...medications, newMedication];
       
       saveMedications(updatedMedications);
@@ -234,7 +240,10 @@ const MedicationScheduler = () => {
       endDate: "",
       days: [],
       instructions: "",
-      reminders: true
+      reminders: true,
+      tabletColor: "",
+      tabletSize: "",
+      tabletAppearance: ""
     });
     setEditingMed(null);
   };
@@ -249,7 +258,10 @@ const MedicationScheduler = () => {
       endDate: medication.endDate,
       days: medication.days,
       instructions: medication.instructions,
-      reminders: medication.reminders
+      reminders: medication.reminders,
+      tabletColor: medication.tabletColor || "",
+      tabletSize: medication.tabletSize || "",
+      tabletAppearance: medication.tabletAppearance || ""
     });
     setEditingMed(medication);
     setIsDialogOpen(true);
@@ -262,7 +274,7 @@ const MedicationScheduler = () => {
       // Try to remove from backend if token exists
       if (token) {
         try {
-          const response = await fetch(`${API_URL}/medications/${id}`, {
+          const response = await fetch(`${API_URL}/medication-form/${id}`, {
             method: 'DELETE',
             headers: {
               'Authorization': `Bearer ${token}`
@@ -280,7 +292,7 @@ const MedicationScheduler = () => {
       }
 
       // Remove from local state and localStorage
-      const newMedications = medications.filter(med => med.id !== id);
+      const newMedications = medications.filter(med => (med._id || med.id) !== id);
       saveMedications(newMedications);
       
       // Automatic SMS reminders are handled by the backend notification scheduler
@@ -321,7 +333,7 @@ const MedicationScheduler = () => {
         return;
       }
 
-      const response = await fetch(`${API_URL}/medications`, {
+      const response = await fetch(`${API_URL}/medication-form`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -495,6 +507,41 @@ const MedicationScheduler = () => {
                     />
                   </div>
 
+                  {/* Physical Appearance Fields */}
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-medium text-gray-900">Physical Appearance of Tablet</h3>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div>
+                        <Label htmlFor="tabletColor">Color of Tablet *</Label>
+                        <Input
+                          id="tabletColor"
+                          value={formData.tabletColor}
+                          onChange={(e) => setFormData({ ...formData, tabletColor: e.target.value })}
+                          placeholder="e.g., White, Blue, Pink"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="tabletSize">Size of Tablet *</Label>
+                        <Input
+                          id="tabletSize"
+                          value={formData.tabletSize}
+                          onChange={(e) => setFormData({ ...formData, tabletSize: e.target.value })}
+                          placeholder="e.g., Small, Medium, Large"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="tabletAppearance">Physical Appearance *</Label>
+                        <Input
+                          id="tabletAppearance"
+                          value={formData.tabletAppearance}
+                          onChange={(e) => setFormData({ ...formData, tabletAppearance: e.target.value })}
+                          placeholder="e.g., Round, Oval, Square"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
                   {/* Reminders */}
                   <div className="flex items-center space-x-2">
                     <Checkbox
@@ -523,7 +570,7 @@ const MedicationScheduler = () => {
         {/* Medications List */}
         <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
           {medications.map((medication) => (
-            <Card key={medication.id} className="border-0 shadow-lg hover:shadow-xl transition-all duration-300 bg-white">
+            <Card key={medication._id || medication.id} className="border-0 shadow-lg hover:shadow-xl transition-all duration-300 bg-white">
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-lg flex items-center space-x-2">
@@ -537,7 +584,7 @@ const MedicationScheduler = () => {
                     <Button 
                       variant="ghost" 
                       size="icon" 
-                      onClick={() => handleDelete(medication.id)}
+                      onClick={() => handleDelete(medication._id || medication.id)}
                       className="text-red-600 hover:text-red-700"
                     >
                       <Trash2 className="h-4 w-4" />
@@ -577,6 +624,33 @@ const MedicationScheduler = () => {
                   <p className="text-sm text-gray-600 bg-gray-50 p-2 rounded">
                     {medication.instructions}
                   </p>
+                )}
+
+                {/* Physical Appearance Information */}
+                {(medication.tabletColor || medication.tabletSize || medication.tabletAppearance) && (
+                  <div className="space-y-2">
+                    <h4 className="text-sm font-medium text-gray-700">Physical Appearance:</h4>
+                    <div className="grid grid-cols-3 gap-2 text-xs">
+                      {medication.tabletColor && (
+                        <div className="bg-blue-50 p-2 rounded">
+                          <span className="font-medium text-blue-700">Color:</span>
+                          <span className="text-blue-600 ml-1">{medication.tabletColor}</span>
+                        </div>
+                      )}
+                      {medication.tabletSize && (
+                        <div className="bg-green-50 p-2 rounded">
+                          <span className="font-medium text-green-700">Size:</span>
+                          <span className="text-green-600 ml-1">{medication.tabletSize}</span>
+                        </div>
+                      )}
+                      {medication.tabletAppearance && (
+                        <div className="bg-purple-50 p-2 rounded">
+                          <span className="font-medium text-purple-700">Shape:</span>
+                          <span className="text-purple-600 ml-1">{medication.tabletAppearance}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 )}
 
                 <div className="flex items-center space-x-2">

@@ -50,8 +50,8 @@ const ReminderSystem = () => {
             // Request browser notification permission and show notification
             showBrowserNotification(reminder);
             
-            // Play sound reminder
-            playReminderSound();
+            // Play sound reminder with medication details
+            playReminderSound(reminder);
 
             // Show toast
             toast({
@@ -97,19 +97,39 @@ const ReminderSystem = () => {
     }
   };
 
-  const playReminderSound = () => {
+  const playReminderSound = (reminder) => {
     // Use Web Audio API or Speech Synthesis for audio reminder
     if ('speechSynthesis' in window) {
-      const utterance = new SpeechSynthesisUtterance('Medication reminder: It\'s time to take your medicine.');
+      let message = '';
+      
+      if (reminder) {
+        message = `Medication reminder: It's time to take ${reminder.medicationName}. Dosage: ${reminder.dosage}.`;
+        if (reminder.instructions) {
+          message += ` ${reminder.instructions}.`;
+        }
+        message += " Please reply TAKEN when you've taken your medication, or SNOOZE to be reminded later.";
+      } else {
+        message = "Medication reminder: It's time to take your medicine.";
+      }
+      
+      const utterance = new SpeechSynthesisUtterance(message);
       utterance.rate = 0.8;
       utterance.pitch = 1;
       speechSynthesis.speak(utterance);
+      
+      // Store the utterance to allow stopping it later if needed
+      window.currentMedicationUtterance = utterance;
     }
   };
 
   const markAsTaken = (reminderId) => {
     setNotifications(prev => prev.filter(n => n.id !== reminderId));
     setActiveReminder(null);
+    
+    // Stop any current voice alert
+    if (window.currentMedicationUtterance) {
+      speechSynthesis.cancel();
+    }
     
     toast({
       title: "Medication Taken",
@@ -121,11 +141,20 @@ const ReminderSystem = () => {
   const snoozeReminder = (reminderId) => {
     setActiveReminder(null);
     
+    // Stop any current voice alert
+    if (window.currentMedicationUtterance) {
+      speechSynthesis.cancel();
+    }
+    
     // Re-show reminder in 5 minutes
     setTimeout(() => {
       const reminder = notifications.find(n => n.id === reminderId);
       if (reminder) {
         setActiveReminder(reminder);
+        
+        // Play sound reminder for snoozed alert
+        playReminderSound(reminder);
+        
         toast({
           title: "Medication Reminder (Snoozed)",
           description: `Don't forget: ${reminder.medicationName} (${reminder.dosage})`,
@@ -143,6 +172,11 @@ const ReminderSystem = () => {
   const dismissReminder = (reminderId) => {
     setNotifications(prev => prev.filter(n => n.id !== reminderId));
     setActiveReminder(null);
+    
+    // Stop any current voice alert
+    if (window.currentMedicationUtterance) {
+      speechSynthesis.cancel();
+    }
   };
 
   return (
@@ -242,4 +276,4 @@ const ReminderSystem = () => {
   );
 };
 
-export default ReminderSystem; 
+export default ReminderSystem;

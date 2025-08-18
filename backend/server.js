@@ -5,12 +5,15 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { body, validationResult } = require('express-validator');
 const mongoose = require('mongoose');
+const auth = require('./middleware/auth'); 
 require('dotenv').config();
 
 // Import services and routes
 const smsRoutes = require('./routes/sms');
 const otpRoutes = require('./routes/otp'); // ✅ OTP route
+const medicationFormRoutes = require('./routes/medicationForm');
 const NotificationScheduler = require('./notificationScheduler');
+// (rollback) remove reminders routes and public action token utilities
 
 // Initialize notification scheduler
 const notificationScheduler = new NotificationScheduler();
@@ -20,14 +23,35 @@ const PORT = process.env.PORT || 5001;
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
 
 // Connect to MongoDB
-mongoose.connect(process.env.MONGODB_URI, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-}).then(() => {
-  console.log('✅ Connected to MongoDB');
-}).catch((err) => {
-  console.error('❌ MongoDB connection error:', err.message);
-});
+async function connectDB() {
+  try {
+    console.log('🔍 Connecting to MongoDB...');
+    
+    // Set default MongoDB URI if not provided
+    const mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/medimate';
+    console.log('📡 MONGODB_URI:', mongoUri);
+    
+    if (!process.env.MONGODB_URI) {
+      console.log('⚠️  Using default MongoDB URI. Create .env file for production.');
+    }
+
+    await mongoose.connect(mongoUri, {
+      useNewUrlParser: true,
+      useUnifiedTopology: true,
+    });
+    
+    console.log('✅ Connected to MongoDB');
+    console.log('Connected to DB name:', mongoose.connection.name);
+    return true;
+  } catch (err) {
+    console.error('❌ MongoDB connection error:', err.message);
+    console.log('💡 Make sure MongoDB is running: mongod');
+    return false;
+  }
+}
+
+// Initialize database connection
+connectDB();
 
 // ✅ Fixed CORS
 const corsOptions = {
@@ -90,7 +114,15 @@ const validateLogin = [
 
 // Routes
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'OK', message: 'MediMate API is running' });
+  res.json({ 
+    status: 'OK', 
+    message: 'MediMate API is running',
+    mongodb: mongoose.connection.readyState === 1 ? 'Connected' : 'Disconnected'
+  });
+});
+
+app.get('/api/test', (req, res) => {
+  res.json({ message: 'Backend server is running!', timestamp: new Date() });
 });
 
 // ✅ OTP routes mounted under /api/otp
@@ -207,6 +239,25 @@ app.get('/api/user/profile', authenticateToken, async (req, res) => {
 // SMS routes
 app.use('/api/sms', smsRoutes);
 
+// (rollback) no reminders API and public links
+
+// Test medication endpoint (no auth required for testing)
+
+
+// Debug middleware to log all requests
+// app.use('/api/medication-form', (req, res, next) => {
+//   console.log('🔍 Medication form request:', {
+//     method: req.method,
+//     url: req.url,
+//     headers: req.headers,
+//     body: req.body
+//   });
+//   next();
+// });
+
+// Medication Form routes with authentication
+app.use('/api/medication-form', authenticateToken, medicationFormRoutes);
+
 // Error handler
 app.use((err, req, res, next) => {
   console.error('Unhandled error middleware:', err);
@@ -219,15 +270,25 @@ app.use('*', (req, res) => {
 });
 
 // Start server
-app.listen(PORT, async () => {
-  console.log(`🚀 MediMate Backend Server running on port ${PORT}`);
-  console.log(`📊 Health check: http://localhost:${PORT}/api/health`);
+try {
+  console.log('🚀 Starting server on port:', PORT);
+  app.listen(PORT, async () => {
+    console.log(`🚀 MediMate Backend Server running on port ${PORT}`);
+    console.log(`📊 Health check: http://localhost:${PORT}/api/health`);
+    console.log('✅ Server ready to accept requests');
 
-  try {
-    notificationScheduler.setData([], []);
-    await notificationScheduler.initializeNotifications();
-    console.log('✅ Notification scheduler initialized successfully');
-  } catch (error) {
-    console.error('❌ Error initializing notification scheduler:', error);
-  }
-});
+    // Initialize notification scheduler with current users
+    try {
+      const users = await require('./models/User').find({}, 'firstName lastName phone');
+      notificationScheduler.setData(users || [], []);
+      await notificationScheduler.initializeNotifications();
+    } catch (e) {
+      console.error('❌ Failed to initialize scheduler:', e.message);
+    }
+  });
+} catch (error) {
+  console.error('❌ Error starting server:', error);
+}
+
+// Export the notificationScheduler instance for use in other modules
+module.exports = { notificationScheduler };

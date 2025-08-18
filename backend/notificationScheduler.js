@@ -33,7 +33,15 @@ class NotificationScheduler {
     try {
       console.log('📅 Scheduling medication reminders...');
       this.users.forEach(user => {
-        const userMedications = this.medications.filter(med => med.userId === user.id);
+        // Get user ID, handling both MongoDB _id and regular id
+        const userId = user._id ? user._id.toString() : user.id;
+        
+        // Filter medications for this user, checking both _id and id
+        const userMedications = this.medications.filter(med => 
+          med.userId === userId || 
+          (med.userId && user._id && med.userId === user._id.toString())
+        );
+        
         userMedications.forEach(medication => {
           if (medication.reminders && medication.times && medication.times.length > 0) {
             medication.times.forEach(time => {
@@ -53,7 +61,11 @@ class NotificationScheduler {
       const [hours, minutes] = time.split(':');
       // Use Asia/Kolkata timezone for India
       const cronExpression = `${minutes} ${hours} * * *`;
-      const jobId = `medication_${user.id}_${medication.id}_${time}`;
+      // Use _id if available, otherwise fall back to id
+      const medicationId = medication._id || medication.id;
+      // Use _id if available, otherwise fall back to id for user as well
+      const userId = user._id ? user._id.toString() : user.id;
+      const jobId = `medication_${userId}_${medicationId}_${time}`;
 
       // Cancel existing job if it exists
       if (this.scheduledJobs.has(jobId)) {
@@ -95,7 +107,10 @@ class NotificationScheduler {
             formattedPhone,
             userName,
             medication.name,
-            time
+            time,
+            medication.dosage,
+            medication.instructions,
+            medication.id
           );
 
           if (result.success) {
@@ -160,51 +175,117 @@ class NotificationScheduler {
   // Add medication reminder for a specific user
   async addMedicationReminder(userId, medication) {
     try {
-      console.log(`📅 Adding medication reminder for user ${userId}, medication ${medication.id}`);
-      const user = this.users.find(u => u.id === userId);
+      if (!userId) {
+        throw new Error('User ID is required for scheduling medication reminders');
+      }
+      
+      if (!medication) {
+        throw new Error('Valid medication object is required for scheduling reminders');
+      }
+      
+      // Use _id instead of id for MongoDB documents
+      const medicationId = medication._id || medication.id;
+      
+      if (!medicationId) {
+        throw new Error('Medication ID is required for scheduling reminders');
+      }
+      
+      console.log(`📅 Adding medication reminder for user ${userId}, medication ${medicationId}`);
+      // Check for both id and _id to handle MongoDB documents
+      const user = this.users.find(u => u.id === userId || u._id.toString() === userId);
       if (!user) {
         throw new Error(`User not found: ${userId}`);
       }
+      
+      if (!medication.reminders) {
+        console.log(`⚠️ Skipping SMS reminder scheduling for medication ${medicationId} - reminders disabled`);
+        return { success: true, message: 'Reminders disabled for this medication' };
+      }
+      
       if (medication.reminders && medication.times && medication.times.length > 0) {
         medication.times.forEach(time => {
           this.scheduleMedicationReminder(user, medication, time);
         });
         console.log(`✅ Added ${medication.times.length} reminders for ${medication.name}`);
+        return { success: true, message: 'Medication reminder scheduled successfully', jobCount: medication.times.length };
       } else {
         console.log(`⚠️ No reminders configured for ${medication.name}`);
+        return { success: true, message: 'No reminder times configured', jobCount: 0 };
       }
     } catch (error) {
       console.error('❌ Error adding medication reminder:', error);
-      throw error;
+      return { success: false, error: error.message };
     }
   }
 
   // Update medication reminder
   async updateMedicationReminder(userId, medication) {
     try {
-      console.log(`📅 Updating medication reminder for user ${userId}, medication ${medication.id}`);
-      this.removeMedicationReminder(userId, medication.id);
-      await this.addMedicationReminder(userId, medication);
+      if (!userId) {
+        throw new Error('User ID is required for updating medication reminders');
+      }
+      
+      if (!medication) {
+        throw new Error('Valid medication object is required for updating reminders');
+      }
+      
+      // Use _id instead of id for MongoDB documents
+      const medicationId = medication._id || medication.id;
+      
+      if (!medicationId) {
+        throw new Error('Medication ID is required for updating reminders');
+      }
+      
+      console.log(`📅 Updating medication reminder for user ${userId}, medication ${medicationId}`);
+      
+      if (!medication.reminders) {
+        console.log(`⚠️ Skipping SMS reminder update for medication ${medicationId} - reminders disabled`);
+        // Remove any existing reminders since they're now disabled
+        this.removeMedicationReminder(userId, medicationId);
+        return { success: true, message: 'Reminders disabled for this medication' };
+      }
+      
+      const removedCount = this.removeMedicationReminder(userId, medicationId);
+      const result = await this.addMedicationReminder(userId, medication);
+      
+      return { 
+        success: true, 
+        message: 'Medication reminder updated successfully', 
+        removedCount: removedCount, 
+        jobCount: result?.jobCount || 0 
+      };
     } catch (error) {
-      console.error('❌ Error updating medication reminder:', error);
-      throw error;
+      console.error(`❌ Error updating medication reminder for user ${userId}, medication ${medication?._id || medication?.id || 'unknown'}:`, error);
+      return { success: false, error: error.message };
     }
   }
 
   // Remove medication reminder
   removeMedicationReminder(userId, medicationId) {
     try {
+      if (!userId) {
+        throw new Error('User ID is required for removing medication reminders');
+      }
+      
+      if (!medicationId) {
+        throw new Error('Medication ID is required for removing reminders');
+      }
+      
       console.log(`📅 Removing medication reminder for user ${userId}, medication ${medicationId}`);
-      const user = this.users.find(u => u.id === userId);
+      // Check for both id and _id to handle MongoDB documents
+      const user = this.users.find(u => u.id === userId || u._id.toString() === userId);
       if (!user) {
         console.warn(`⚠️ User not found: ${userId}`);
-        return;
+        return 0;
       }
-      const medication = this.medications.find(m => m.id === medicationId && m.userId === userId);
+      
+      const medication = this.medications.find(m => (m.id === medicationId || m._id === medicationId) && m.userId === userId);
       if (!medication) {
-        console.warn(`⚠️ Medication not found: ${medicationId} for user ${userId}`);
-        return;
+        console.warn(`⚠️ Medication not found: ${medicationId} for user  ${userId}`);
+        return 0;
       }
+      
+      let removedCount = 0;
       if (medication.times) {
         medication.times.forEach(time => {
           const jobId = `medication_${userId}_${medicationId}_${time}`;
@@ -212,12 +293,16 @@ class NotificationScheduler {
             this.scheduledJobs.get(jobId).stop();
             this.scheduledJobs.delete(jobId);
             console.log(`   ✅ Removed reminder for ${medication.name} at ${time}`);
+            removedCount++;
           }
         });
       }
+      
+      console.log(`✅ Removed ${removedCount} reminder jobs for medication ${medicationId}`);
+      return removedCount;
     } catch (error) {
-      console.error('❌ Error removing medication reminder:', error);
-      throw error;
+      console.error(`❌ Error removing medication reminder for user ${userId}, medication ${medicationId}:`, error);
+      return 0; // Return 0 to indicate no jobs were removed due to error
     }
   }
 

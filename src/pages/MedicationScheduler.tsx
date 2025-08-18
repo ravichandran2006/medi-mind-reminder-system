@@ -32,6 +32,11 @@ interface Medication {
   days: string[];
   instructions: string;
   reminders: boolean;
+
+  tabletShape?: string;  // added new optional fields here
+  tabletColor?: string;
+  tabletSize?: string;
+  form?: string;
 }
 
 const DAYS_OF_WEEK = [
@@ -59,7 +64,12 @@ const MedicationScheduler = () => {
     endDate: "",
     days: [] as string[],
     instructions: "",
-    reminders: true
+    reminders: true,
+
+    tabletShape: "",    // added new fields here
+    tabletColor: "",
+    tabletSize: "",
+    form: ""
   });
 
   // Load medications from localStorage
@@ -92,42 +102,55 @@ const MedicationScheduler = () => {
     setFormData({ ...formData, frequency, times: newTimes });
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!formData.name || !formData.dosage || formData.times.some(t => !t)) {
-      toast({
-        title: "Validation Error",
-        description: "Please fill in all required fields",
-        variant: "destructive"
-      });
+      toast({ title: "Validation Error", description: "Please fill in all required fields", variant: "destructive" });
       return;
     }
+  
+    try {
+      const url = editingMed ? `/api/medications/${editingMed.id}` : '/api/medications'; // fixed URL for PUT
+      const method = editingMed ? 'PUT' : 'POST';
 
-    const medication: Medication = {
-      id: editingMed ? editingMed.id : Date.now().toString(),
-      ...formData
-    };
-
-    let newMedications;
-    if (editingMed) {
-      newMedications = medications.map(med => 
-        med.id === editingMed.id ? medication : med
-      );
-      toast({
-        title: "Medication Updated",
-        description: `${medication.name} has been updated successfully.`,
+      const res = await fetch(url, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formData),
       });
-    } else {
-      newMedications = [...medications, medication];
+  
+      if (!res.ok) throw new Error('Failed to save medication');
+  
+      const data = await res.json();
+  
+      // Update local medications list
+      if (editingMed) {
+        setMedications((prev) =>
+          prev.map((med) => (med.id === data.medication.id ? data.medication : med))
+        );
+      } else {
+        setMedications((prev) => [...prev, data.medication]);
+      }
+  
       toast({
-        title: "Medication Added",
-        description: `${medication.name} has been added to your schedule.`,
+        title: editingMed ? "Medication Updated" : "Medication Added",
+        description: `${data.medication.name} has been ${editingMed ? 'updated' : 'added'} successfully.`,
+      });
+  
+      setIsDialogOpen(false);
+      resetForm();
+  
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: (error as Error).message || 'Failed to save medication',
+        variant: "destructive"
       });
     }
-
-    saveMedications(newMedications);
-    setIsDialogOpen(false);
-    resetForm();
   };
+  
+  
 
   const resetForm = () => {
     setFormData({
@@ -139,7 +162,12 @@ const MedicationScheduler = () => {
       endDate: "",
       days: [],
       instructions: "",
-      reminders: true
+      reminders: true,
+
+      tabletShape: "",   // reset new fields
+      tabletColor: "",
+      tabletSize: "",
+      form: ""
     });
     setEditingMed(null);
   };
@@ -154,7 +182,12 @@ const MedicationScheduler = () => {
       endDate: medication.endDate,
       days: medication.days,
       instructions: medication.instructions,
-      reminders: medication.reminders
+      reminders: medication.reminders,
+
+      tabletShape: medication.tabletShape || "",    // load new fields
+      tabletColor: medication.tabletColor || "",
+      tabletSize: medication.tabletSize || "",
+      form: medication.form || ""
     });
     setEditingMed(medication);
     setIsDialogOpen(true);
@@ -225,6 +258,78 @@ const MedicationScheduler = () => {
                       placeholder="e.g., 500mg, 1 tablet"
                     />
                   </div>
+                </div>
+
+                {/* Tablet Shape */}
+                <div>
+                  <Label htmlFor="tabletShape">Tablet Shape *</Label>
+                  <Select
+                    value={formData.tabletShape}
+                    onValueChange={(value) => setFormData({ ...formData, tabletShape: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select tablet shape" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="round">Round</SelectItem>
+                      <SelectItem value="oval">Oval</SelectItem>
+                      <SelectItem value="square">Square</SelectItem>
+                      <SelectItem value="triangle">Triangle</SelectItem>
+                      <SelectItem value="diamond">Diamond</SelectItem>
+                      <SelectItem value="hexagon">Hexagon</SelectItem>
+                      <SelectItem value="other">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Tablet Color */}
+                <div>
+                  <Label htmlFor="tabletColor">Tablet Color *</Label>
+                  <Input
+                    id="tabletColor"
+                    value={formData.tabletColor}
+                    onChange={(e) => setFormData({ ...formData, tabletColor: e.target.value })}
+                    placeholder="e.g., White, Blue"
+                  />
+                </div>
+
+                {/* Tablet Size */}
+                <div>
+                  <Label htmlFor="tabletSize">Tablet Size *</Label>
+                  <Select
+                    value={formData.tabletSize}
+                    onValueChange={(value) => setFormData({ ...formData, tabletSize: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select tablet size" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="small">Small</SelectItem>
+                      <SelectItem value="medium">Medium</SelectItem>
+                      <SelectItem value="large">Large</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Medication Form (optional) */}
+                <div>
+                  <Label htmlFor="form">Medication Form (Optional)</Label>
+                  <Select
+                    value={formData.form}
+                    onValueChange={(value) => setFormData({ ...formData, form: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select medication form" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="tablet">Tablet</SelectItem>
+                      <SelectItem value="capsule">Capsule</SelectItem>
+                      <SelectItem value="liquid">Liquid</SelectItem>
+                      <SelectItem value="injection">Injection</SelectItem>
+                      <SelectItem value="inhaler">Inhaler</SelectItem>
+                      <SelectItem value="other">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 {/* Frequency and Times */}

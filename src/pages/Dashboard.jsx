@@ -14,6 +14,8 @@ import {
   CheckCircle
 } from "lucide-react";
 import medicalHero from "@/assets/medical-hero.jpg";
+import ScheduledReminders from "@/components/ScheduledReminders";
+
 
 const Dashboard = () => {
   const [upcomingMeds] = useState([
@@ -184,6 +186,20 @@ const Dashboard = () => {
           </Card>
         </div>
 
+        {/* Scheduled Reminders */}
+        <Card className="border-0 shadow-card">
+          <CardHeader>
+            <CardTitle className="flex items-center space-x-2">
+              <Bell className="h-5 w-5 text-primary" />
+              <span>SMS Medication Reminders</span>
+            </CardTitle>
+            <CardDescription>Your scheduled medication reminders via SMS</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ScheduledReminders />
+          </CardContent>
+        </Card>
+
         {/* Health Tips */}
         <Card className="border-0 shadow-card bg-gradient-medical text-white">
           <CardHeader>
@@ -200,4 +216,4 @@ const Dashboard = () => {
   );
 };
 
-export default Dashboard; 
+export default Dashboard;

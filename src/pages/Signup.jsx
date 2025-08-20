@@ -65,7 +65,7 @@ const Signup = () => {
     setOtpLoading(true);
     try {
       const mobileOnly = formData.phone.slice(3); // send only 10 digits
-      const response = await fetch("http://localhost:5001/api/otp/send-otp", {
+      const response = await fetch("http://localhost:5002/api/otp/send-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ mobile: mobileOnly })
@@ -108,7 +108,7 @@ const Signup = () => {
     setOtpLoading(true);
     try {
       const mobileOnly = formData.phone.slice(3);
-      const response = await fetch("http://localhost:5001/api/otp/verify-otp", {
+      const response = await fetch("http://localhost:5002/api/otp/verify-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ mobile: mobileOnly, otp })
@@ -176,7 +176,7 @@ const Signup = () => {
 
     setIsLoading(true);
     try {
-      const response = await fetch("http://localhost:5001/api/auth/signup", {
+      const response = await fetch("http://localhost:5002/api/auth/signup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData)

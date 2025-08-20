@@ -5,41 +5,41 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { body, validationResult } = require('express-validator');
 const mongoose = require('mongoose');
-const auth = require('./middleware/auth'); 
-require('dotenv').config();
+require('dotenv').config(); // ✅ ensure .env is loaded first
 
 // Import services and routes
 const smsRoutes = require('./routes/sms');
-const otpRoutes = require('./routes/otp'); // ✅ OTP route
+const otpRoutes = require('./routes/otp');
 const medicationFormRoutes = require('./routes/medicationForm');
+const ocrRoutes = require('./routes/ocr');
 const NotificationScheduler = require('./notificationScheduler');
-// (rollback) remove reminders routes and public action token utilities
 
 // Initialize notification scheduler
 const notificationScheduler = new NotificationScheduler();
 
 const app = express();
 const PORT = process.env.PORT || 5001;
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
+
+// ✅ Enforce JWT secret
+if (!process.env.JWT_SECRET) {
+  throw new Error("❌ JWT_SECRET not defined in .env file");
+}
+const JWT_SECRET = process.env.JWT_SECRET;
+console.log("JWT_SECRET in use:", process.env.JWT_SECRET);
 
 // Connect to MongoDB
 async function connectDB() {
   try {
     console.log('🔍 Connecting to MongoDB...');
-    
-    // Set default MongoDB URI if not provided
     const mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/medimate';
     console.log('📡 MONGODB_URI:', mongoUri);
-    
-    if (!process.env.MONGODB_URI) {
-      console.log('⚠️  Using default MongoDB URI. Create .env file for production.');
-    }
 
     await mongoose.connect(mongoUri, {
+      // ⚠️ These options are deprecated in Mongoose v7+, can be removed
       useNewUrlParser: true,
       useUnifiedTopology: true,
     });
-    
+
     console.log('✅ Connected to MongoDB');
     console.log('Connected to DB name:', mongoose.connection.name);
     return true;
@@ -49,19 +49,17 @@ async function connectDB() {
     return false;
   }
 }
-
-// Initialize database connection
 connectDB();
 
 // ✅ Fixed CORS
 const corsOptions = {
-  origin: ['http://localhost:3000', 'http://localhost:8080'], // allow both
+  origin: ['http://localhost:3000', 'http://localhost:8080'],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true
 };
 app.use(cors(corsOptions));
-app.options('*', cors(corsOptions)); // Handle preflight
+app.options('*', cors(corsOptions)); // ✅ preflight support
 
 // Middleware
 app.use(express.json());
@@ -78,6 +76,7 @@ const authenticateToken = (req, res, next) => {
   }
   jwt.verify(token, JWT_SECRET, (err, user) => {
     if (err) {
+      console.error("❌ JWT verification failed:", err.message);
       return res.status(403).json({ message: 'Invalid or expired token' });
     }
     req.user = user;
@@ -112,6 +111,11 @@ const validateLogin = [
   body('password').notEmpty().withMessage('Password is required')
 ];
 
+// ✅ Root route for quick testing
+app.get('/', (req, res) => {
+  res.json({ message: '🚀 MediMate Backend is alive', time: new Date() });
+});
+
 // Routes
 app.get('/api/health', (req, res) => {
   res.json({ 
@@ -125,15 +129,14 @@ app.get('/api/test', (req, res) => {
   res.json({ message: 'Backend server is running!', timestamp: new Date() });
 });
 
-// ✅ OTP routes mounted under /api/otp
+// ✅ OTP routes
 app.use('/api/otp', otpRoutes);
 
-// Signup route
+// Signup
 app.post('/api/auth/signup', validateSignup, async (req, res) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      console.log('❌ Signup validation errors:', errors.array());
       return res.status(400).json({ message: 'Validation failed', errors: errors.array() });
     }
 
@@ -181,22 +184,20 @@ app.post('/api/auth/signup', validateSignup, async (req, res) => {
     });
 
   } catch (error) {
+    console.error("❌ Signup error:", error.message);
     if (error && error.code === 11000) {
       const dupField = Object.keys(error.keyPattern || {}).join(', ') || 'field';
-      console.error('Duplicate key error on signup:', error.keyValue || error.message);
       return res.status(400).json({ message: `Duplicate value for ${dupField}` });
     }
-    console.error('Signup error:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
 });
 
-// Login route
+// Login
 app.post('/api/auth/login', validateLogin, async (req, res) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      console.log('❌ Login validation errors:', errors.array());
       return res.status(400).json({ message: 'Validation failed', errors: errors.array() });
     }
 
@@ -217,12 +218,12 @@ app.post('/api/auth/login', validateLogin, async (req, res) => {
     res.json({ message: 'Login successful', user: userWithoutPassword, token });
 
   } catch (error) {
-    console.error('Login error:', error);
+    console.error("❌ Login error:", error.message);
     res.status(500).json({ message: 'Internal server error' });
   }
 });
 
-// User profile route
+// Profile
 app.get('/api/user/profile', authenticateToken, async (req, res) => {
   try {
     const user = await User.findById(req.user.userId);
@@ -231,31 +232,18 @@ app.get('/api/user/profile', authenticateToken, async (req, res) => {
     const { password: _, ...userWithoutPassword } = user.toObject();
     res.json({ user: userWithoutPassword });
   } catch (error) {
-    console.error('Get profile error:', error);
+    console.error("❌ Profile fetch error:", error.message);
     res.status(500).json({ message: 'Internal server error' });
   }
 });
 
-// SMS routes
+// SMS
 app.use('/api/sms', smsRoutes);
 
-// (rollback) no reminders API and public links
+// OCR
+app.use('/api/ocr', ocrRoutes);
 
-// Test medication endpoint (no auth required for testing)
-
-
-// Debug middleware to log all requests
-// app.use('/api/medication-form', (req, res, next) => {
-//   console.log('🔍 Medication form request:', {
-//     method: req.method,
-//     url: req.url,
-//     headers: req.headers,
-//     body: req.body
-//   });
-//   next();
-// });
-
-// Medication Form routes with authentication
+// Medication Form (protected)
 app.use('/api/medication-form', authenticateToken, medicationFormRoutes);
 
 // Error handler
@@ -264,22 +252,19 @@ app.use((err, req, res, next) => {
   res.status(500).json({ message: 'Something went wrong!' });
 });
 
-// 404 handler
+// 404
 app.use('*', (req, res) => {
   res.status(404).json({ message: 'Route not found' });
 });
 
 // Start server
 try {
-  console.log('🚀 Starting server on port:', PORT);
   app.listen(PORT, async () => {
-    console.log(`🚀 MediMate Backend Server running on port ${PORT}`);
+    console.log(`🚀 MediMate Backend running on http://localhost:${PORT}`);
     console.log(`📊 Health check: http://localhost:${PORT}/api/health`);
-    console.log('✅ Server ready to accept requests');
 
-    // Initialize notification scheduler with current users
     try {
-      const users = await require('./models/User').find({}, 'firstName lastName phone');
+      const users = await User.find({}, 'firstName lastName phone');
       notificationScheduler.setData(users || [], []);
       await notificationScheduler.initializeNotifications();
     } catch (e) {
@@ -290,5 +275,4 @@ try {
   console.error('❌ Error starting server:', error);
 }
 
-// Export the notificationScheduler instance for use in other modules
 module.exports = { notificationScheduler };

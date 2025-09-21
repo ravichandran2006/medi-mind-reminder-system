@@ -12,6 +12,7 @@ import MedicationScheduler from "./pages/MedicationScheduler.jsx";
 import HealthLog from "./pages/HealthLog.jsx";
 import AIChat from "./pages/AIChat.jsx";
 import HealthTips from "./pages/HealthTips.jsx";
+import MedicalAnalysis from "./pages/MedicalAnalysis.jsx";
 import Login from "./pages/Login.jsx";
 import Signup from "./pages/Signup.jsx";
 import NotFound from "./pages/NotFound.jsx";
@@ -61,6 +62,18 @@ const App = () => (
                   <Navigation />
                   <div className="lg:ml-64 flex-1">
                     <HealthLog />
+                  </div>
+                  <ReminderSystem />
+                </div>
+              </ProtectedRoute>
+            } />
+            
+            <Route path="/medical-analysis" element={
+              <ProtectedRoute>
+                <div className="flex min-h-screen w-full">
+                  <Navigation />
+                  <div className="lg:ml-64 flex-1">
+                    <MedicalAnalysis />
                   </div>
                   <ReminderSystem />
                 </div>

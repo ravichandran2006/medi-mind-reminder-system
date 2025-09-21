@@ -1,0 +1,34 @@
+MEDICAL REPORT
+
+Patient Name: John Doe
+Age: 45 years
+Gender: Male
+Weight: 75 kg
+
+DIAGNOSIS:
+- Type 2 Diabetes Mellitus
+- Hypertension
+- Mild Hyperlipidemia
+
+LABORATORY RESULTS:
+- Fasting Blood Sugar: 145 mg/dL (High)
+- HbA1c: 7.2% (High)
+- Total Cholesterol: 220 mg/dL (High)
+- LDL: 130 mg/dL (High)
+- HDL: 38 mg/dL (Low)
+- Blood Pressure: 140/90 mmHg (High)
+
+PRESCRIBED MEDICATIONS:
+1. Metformin 500mg - Twice daily after meals
+2. Lisinopril 10mg - Once daily in morning
+3. Atorvastatin 20mg - Once daily at bedtime
+
+LIFESTYLE RECOMMENDATIONS:
+- Low carbohydrate diet
+- Regular exercise 30 minutes daily
+- Monitor blood sugar levels
+- Follow up in 3 months
+
+Dr. Smith
+License: MD12345
+Date: Sat Sep 20 2025

@@ -1,9 +1,10 @@
-import { useState, useRef, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { useAuth } from "../contexts/AuthContext";
 import { 
   MessageCircle,
   Send,
@@ -12,58 +13,56 @@ import {
   Bot,
   User,
   Volume2,
-  VolumeX
+  VolumeX,
+  Loader2
 } from "lucide-react";
+import axios from "axios";
+
+// Quick prompts for medical assistance
+const QUICK_PROMPTS = {
+  medication: "How should I take my medications?",
+  vitals: "What are normal vital signs?",
+  health: "How can I improve my health?",
+  emergency: "What should I do in a medical emergency?",
+  sideEffects: "What are common medication side effects?",
+  dosage: "How do I manage my medication dosage?"
+};
 
 const AIChat = () => {
+  const { logout } = useAuth();
   const [messages, setMessages] = useState([
     {
       id: "1",
       text: "Hello! I'm your AI health assistant. I can help you with medication questions, health tips, and general medical information. How can I assist you today?",
       sender: 'ai',
-      timestamp: new Date()
+      timestamp: new Date(),
+      language: 'en'
     }
   ]);
   const [inputMessage, setInputMessage] = useState("");
   const [isListening, setIsListening] = useState(false);
   const [speechEnabled, setSpeechEnabled] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
   
   const scrollAreaRef = useRef(null);
   const recognitionRef = useRef(null);
 
-  // Mock AI responses for demo
-  const getMockResponse = (userMessage) => {
-    const message = userMessage.toLowerCase();
-    
-    if (message.includes('medication') || message.includes('medicine') || message.includes('pill')) {
-      return "I can help with medication information! Remember to always take medications as prescribed by your doctor. Never stop or change medications without consulting your healthcare provider. Is there a specific medication you'd like to know about?";
+  // Initialize speech synthesis voices
+  useEffect(() => {
+    if (speechEnabled && 'speechSynthesis' in window) {
+      speechSynthesis.getVoices();
     }
-    
-    if (message.includes('blood pressure')) {
-      return "Normal blood pressure is typically around 120/80 mmHg. High blood pressure (hypertension) is a serious condition that should be monitored regularly. Make sure to take any prescribed blood pressure medications consistently and maintain a healthy lifestyle with regular exercise and a low-sodium diet.";
-    }
-    
-    if (message.includes('heart rate') || message.includes('pulse')) {
-      return "A normal resting heart rate for adults is typically 60-100 beats per minute. Athletes may have lower resting heart rates. If you notice unusual changes in your heart rate, consult your healthcare provider.";
-    }
-    
-    if (message.includes('weight') || message.includes('diet')) {
-      return "Maintaining a healthy weight is important for overall health. Focus on a balanced diet with fruits, vegetables, lean proteins, and whole grains. Regular physical activity is also key. Consult with a healthcare provider or nutritionist for personalized advice.";
-    }
-    
-    if (message.includes('temperature') || message.includes('fever')) {
-      return "Normal body temperature is around 98.6°F (37°C). A fever is generally considered 100.4°F (38°C) or higher. If you have a persistent fever or other concerning symptoms, contact your healthcare provider.";
-    }
-    
-    if (message.includes('reminder') || message.includes('schedule')) {
-      return "Setting up medication reminders is crucial for treatment success! You can use the Medication Scheduler in this app to set up automatic reminders. Taking medications at consistent times helps maintain proper levels in your body.";
-    }
-    
-    return "I understand you're asking about health-related topics. While I can provide general information, please remember that I'm not a substitute for professional medical advice. Always consult with your healthcare provider for personalized medical guidance. Is there something specific about medications or health monitoring I can help you with?";
-  };
+  }, [speechEnabled]);
 
-  // Speech recognition setup
+  // Auto-scroll to bottom when messages change
+  useEffect(() => {
+    if (scrollAreaRef.current) {
+      scrollAreaRef.current.scrollTop = scrollAreaRef.current.scrollHeight;
+    }
+  }, [messages]);
+
+  // Initialize speech recognition for English
   useEffect(() => {
     if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -74,12 +73,15 @@ const AIChat = () => {
 
       recognitionRef.current.onresult = (event) => {
         const transcript = event.results[0][0].transcript;
-        setInputMessage(transcript);
+        setInputMessage(prev => prev ? `${prev} ${transcript}` : transcript);
         setIsListening(false);
       };
 
-      recognitionRef.current.onerror = () => {
+      recognitionRef.current.onerror = (event) => {
         setIsListening(false);
+        alert(event.error === 'not-allowed' 
+          ? "Microphone access was denied. Please allow microphone access in your browser settings."
+          : "Failed to recognize speech");
       };
 
       recognitionRef.current.onend = () => {
@@ -88,53 +90,119 @@ const AIChat = () => {
     }
   }, []);
 
-  // Auto-scroll to bottom
-  useEffect(() => {
-    if (scrollAreaRef.current) {
-      scrollAreaRef.current.scrollTop = scrollAreaRef.current.scrollHeight;
-    }
-  }, [messages]);
-
+  // Handle sending a message
   const handleSendMessage = async () => {
     if (!inputMessage.trim()) return;
+
+    const token = localStorage.getItem('token');
+    if (!token) {
+      alert("Please login to use the chat");
+      return;
+    }
 
     const userMessage = {
       id: Date.now().toString(),
       text: inputMessage,
       sender: 'user',
-      timestamp: new Date()
+      timestamp: new Date(),
+      language: 'en'
     };
 
     setMessages(prev => [...prev, userMessage]);
     setInputMessage("");
     setIsLoading(true);
 
-    // Simulate AI processing delay
-    setTimeout(() => {
+    try {
+      const response = await axios.post('http://localhost:5001/api/chat', {
+        message: inputMessage
+      }, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
       const aiResponse = {
         id: (Date.now() + 1).toString(),
-        text: getMockResponse(inputMessage),
+        text: response.data.response,
         sender: 'ai',
-        timestamp: new Date()
+        timestamp: new Date(),
+        language: 'en'
       };
 
       setMessages(prev => [...prev, aiResponse]);
-      setIsLoading(false);
 
-      // Text-to-speech for AI response
-      if (speechEnabled && 'speechSynthesis' in window) {
-        const utterance = new SpeechSynthesisUtterance(aiResponse.text);
-        utterance.rate = 0.8;
-        utterance.pitch = 1;
-        speechSynthesis.speak(utterance);
+      // Speak the response if speech is enabled
+      if (speechEnabled) {
+        speakResponse(aiResponse.text);
       }
-    }, 1000);
+    } catch (error) {
+      console.error('Chat error:', error);
+      
+      if (error.response?.status === 401 || error.response?.status === 403) {
+        alert("Session expired. Please login again");
+        logout();
+      } else {
+        alert(error.response?.data?.message || "Failed to get AI response");
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Enhanced speech synthesis for English
+  const speakResponse = (text) => {
+    if (!speechEnabled || !('speechSynthesis' in window)) return;
+
+    window.speechSynthesis.cancel();
+
+    const utterance = new SpeechSynthesisUtterance(text);
+    const voices = speechSynthesis.getVoices();
+    
+    // Find the best English voice
+    const englishVoice = voices.find(voice => 
+      voice.lang.includes('en-US') || voice.lang.includes('en-GB') || voice.name.includes('English')
+    );
+
+    if (englishVoice) {
+      utterance.voice = englishVoice;
+    }
+    
+    utterance.lang = 'en-US';
+    utterance.rate = 0.9;
+    utterance.pitch = 1;
+    utterance.volume = 1;
+
+    setIsSpeaking(true);
+    
+    utterance.onend = () => {
+      setIsSpeaking(false);
+    };
+
+    utterance.onerror = (event) => {
+      console.error('Speech synthesis error:', event);
+      setIsSpeaking(false);
+      alert("Failed to speak the response");
+    };
+
+    window.speechSynthesis.speak(utterance);
+  };
+
+  // Start/stop browser speech recognition
+  const toggleSpeechRecognition = () => {
+    if (isListening) {
+      stopListening();
+    } else {
+      startListening();
+    }
   };
 
   const startListening = () => {
     if (recognitionRef.current && !isListening) {
       setIsListening(true);
       recognitionRef.current.start();
+    } else if (!recognitionRef.current) {
+      alert("Voice input not supported. Your browser doesn't support speech recognition. Try using Chrome or Edge.");
     }
   };
 
@@ -145,6 +213,7 @@ const AIChat = () => {
     }
   };
 
+  // Handle key press in input
   const handleKeyPress = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -152,84 +221,113 @@ const AIChat = () => {
     }
   };
 
+  // Quick action handlers
+  const handleQuickAction = (type) => {
+    const prompt = QUICK_PROMPTS[type];
+    if (prompt) {
+      setInputMessage(prompt);
+    }
+  };
+
+  // Stop all voice activities when component unmounts
+  useEffect(() => {
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
+      window.speechSynthesis.cancel();
+    };
+  }, []);
+
   return (
-    <div className="min-h-screen bg-gradient-accent p-6">
+    <div className="min-h-screen bg-gradient-accent p-4 md:p-6">
       <div className="max-w-4xl mx-auto">
         <Card className="h-[calc(100vh-8rem)] border-0 shadow-card flex flex-col">
           <CardHeader className="border-b bg-gradient-primary text-white rounded-t-lg">
             <div className="flex items-center justify-between">
               <CardTitle className="flex items-center space-x-2">
                 <Bot className="h-6 w-6" />
-                <span>AI Health Assistant</span>
+                <span>MediMate AI Assistant</span>
               </CardTitle>
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center space-x-3">
+                {/* Voice Toggle */}
                 <Button
                   variant="ghost"
                   size="icon"
                   onClick={() => setSpeechEnabled(!speechEnabled)}
-                  className="text-white hover:bg-white/20"
+                  className={`text-white hover:bg-white/20 ${
+                    isSpeaking ? 'animate-pulse' : ''
+                  }`}
                 >
-                  {speechEnabled ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
+                  {speechEnabled ? (
+                    <Volume2 className="h-4 w-4" />
+                  ) : (
+                    <VolumeX className="h-4 w-4" />
+                  )}
                 </Button>
+                
+                {/* Language Badge */}
                 <Badge variant="secondary" className="bg-white/20 text-white border-0">
-                  {speechEnabled ? "Voice On" : "Voice Off"}
+                  English
                 </Badge>
               </div>
             </div>
           </CardHeader>
 
-          <CardContent className="flex-1 flex flex-col p-0">
+          <CardContent className="flex-1 flex flex-col p-0 overflow-hidden">
             {/* Messages Area */}
-            <ScrollArea className="flex-1 p-6" ref={scrollAreaRef}>
-              <div className="space-y-4">
-                {messages.map((message) => (
-                  <div
-                    key={message.id}
-                    className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}
-                  >
+            <div className="flex-1 overflow-hidden">
+              <ScrollArea className="h-full px-6 py-4" ref={scrollAreaRef}>
+                <div className="space-y-4 pr-2">
+                  {messages.map((message) => (
                     <div
-                      className={`max-w-[80%] p-4 rounded-lg ${
-                        message.sender === 'user'
-                          ? 'bg-gradient-primary text-white'
-                          : 'bg-muted text-foreground'
-                      }`}
+                      key={message.id}
+                      className={`flex w-full ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}
                     >
-                      <div className="flex items-start space-x-2">
-                        {message.sender === 'ai' && (
-                          <Bot className="h-5 w-5 mt-0.5 text-primary" />
-                        )}
-                        {message.sender === 'user' && (
-                          <User className="h-5 w-5 mt-0.5 text-white" />
-                        )}
-                        <div className="flex-1">
-                          <p className="text-sm leading-relaxed">{message.text}</p>
-                          <p className={`text-xs mt-2 ${
-                            message.sender === 'user' ? 'text-white/70' : 'text-muted-foreground'
-                          }`}>
-                            {message.timestamp.toLocaleTimeString()}
-                          </p>
+                      <div
+                        className={`max-w-[75%] min-w-0 p-4 rounded-lg break-words ${
+                          message.sender === 'user'
+                            ? 'bg-gradient-primary text-white'
+                            : 'bg-muted text-foreground'
+                        }`}
+                      >
+                        <div className="flex items-start space-x-2">
+                          {message.sender === 'ai' && (
+                            <Bot className="h-5 w-5 mt-0.5 text-primary flex-shrink-0" />
+                          )}
+                          {message.sender === 'user' && (
+                            <User className="h-5 w-5 mt-0.5 text-white flex-shrink-0" />
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm leading-relaxed break-words">{message.text}</p>
+                            <div className={`flex items-center justify-between mt-2 text-xs ${
+                              message.sender === 'user' ? 'text-white/70' : 'text-muted-foreground'
+                            }`}>
+                              <span>{message.timestamp.toLocaleTimeString()}</span>
+                            </div>
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
-                ))}
-                
-                {isLoading && (
-                  <div className="flex justify-start">
-                    <div className="bg-muted p-4 rounded-lg max-w-[80%]">
-                      <div className="flex items-center space-x-2">
-                        <Bot className="h-5 w-5 text-primary" />
-                        <div className="flex space-x-1">
-                          <div className="w-2 h-2 bg-primary rounded-full animate-bounce" />
-                          <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />
-                          <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
+                  ))}
+                  
+                  {isLoading && (
+                    <div className="flex justify-start w-full">
+                      <div className="bg-muted p-4 rounded-lg max-w-[75%]">
+                        <div className="flex items-center space-x-2">
+                          <Bot className="h-5 w-5 text-primary flex-shrink-0" />
+                          <div className="flex space-x-1">
+                            <div className="w-2 h-2 bg-primary rounded-full animate-bounce" />
+                            <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />
+                            <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
-                )}
-              </div>
-            </ScrollArea>
+                  )}
+                </div>
+              </ScrollArea>
+            </div>
 
             {/* Input Area */}
             <div className="border-t p-4 bg-accent/30">
@@ -250,16 +348,21 @@ const AIChat = () => {
                   )}
                 </div>
                 
+                {/* Voice Input Button */}
                 <Button
                   variant="outline"
                   size="icon"
-                  onClick={isListening ? stopListening : startListening}
+                  onClick={toggleSpeechRecognition}
                   className={isListening ? "bg-destructive text-white" : ""}
-                  disabled={!recognitionRef.current}
                 >
-                  {isListening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+                  {isListening ? (
+                    <MicOff className="h-4 w-4" />
+                  ) : (
+                    <Mic className="h-4 w-4" />
+                  )}
                 </Button>
                 
+                {/* Send Button */}
                 <Button
                   onClick={handleSendMessage}
                   disabled={!inputMessage.trim() || isLoading}
@@ -286,33 +389,39 @@ const AIChat = () => {
           <Button
             variant="outline"
             className="p-4 h-auto text-left hover:bg-accent"
-            onClick={() => setInputMessage("How should I take my medications?")}
+            onClick={() => handleQuickAction('medication')}
           >
             <div>
               <p className="font-medium">Medication Help</p>
-              <p className="text-xs text-muted-foreground">Get guidance on taking medications</p>
+              <p className="text-xs text-muted-foreground">
+                Get guidance on taking medications
+              </p>
             </div>
           </Button>
           
           <Button
             variant="outline"
             className="p-4 h-auto text-left hover:bg-accent"
-            onClick={() => setInputMessage("What are normal vital signs?")}
+            onClick={() => handleQuickAction('emergency')}
           >
             <div>
-              <p className="font-medium">Vital Signs</p>
-              <p className="text-xs text-muted-foreground">Learn about healthy ranges</p>
+              <p className="font-medium">Emergency Help</p>
+              <p className="text-xs text-muted-foreground">
+                Guidance for medical emergencies
+              </p>
             </div>
           </Button>
           
           <Button
             variant="outline"
             className="p-4 h-auto text-left hover:bg-accent"
-            onClick={() => setInputMessage("How can I improve my health?")}
+            onClick={() => handleQuickAction('health')}
           >
             <div>
               <p className="font-medium">Health Tips</p>
-              <p className="text-xs text-muted-foreground">Get personalized advice</p>
+              <p className="text-xs text-muted-foreground">
+                Get personalized advice
+              </p>
             </div>
           </Button>
         </div>
@@ -321,4 +430,4 @@ const AIChat = () => {
   );
 };
 
-export default AIChat; 
+export default AIChat;

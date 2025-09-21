@@ -13,7 +13,8 @@ import {
   X,
   Stethoscope,
   LogOut,
-  User
+  User,
+  FileText
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -26,6 +27,7 @@ const Navigation = () => {
     { name: "Dashboard", href: "/", icon: Home },
     { name: "Medications", href: "/medications", icon: Pill },
     { name: "Health Log", href: "/health-log", icon: Activity },
+    { name: "Medical Analysis", href: "/medical-analysis", icon: FileText },
     { name: "AI Assistant", href: "/ai-chat", icon: MessageCircle },
     { name: "Health Tips", href: "/health-tips", icon: Lightbulb },
   ];

@@ -35,7 +35,7 @@ router.get('/', async (req, res) => {
 router.post('/', validateMedication, async (req, res) => {
   try {
     console.log('📝 Creating new medication...');
-    console.log('👤 User ID:', req.user.userId);
+    console.log('👤 User ID:', req.user ? req.user.userId : 'Not available');
     console.log('📦 Request body:', JSON.stringify(req.body, null, 2));
     
     const errors = validationResult(req);
@@ -45,6 +45,11 @@ router.post('/', validateMedication, async (req, res) => {
         message: 'Validation failed',
         errors: errors.array() 
       });
+    }
+
+    // Check if user is authenticated
+    if (!req.user || !req.user.userId) {
+      return res.status(401).json({ message: 'User authentication required' });
     }
 
     const userId = req.user.userId;
@@ -122,22 +127,27 @@ router.post('/', validateMedication, async (req, res) => {
           
           // Schedule SMS reminders using the notification scheduler
           try {
-            // Get the notificationScheduler instance instead of the class
-            const notificationSchedulerInstance = require('../server').notificationScheduler;
+            // Import server to get notificationScheduler instance
+            const server = require('../server');
             const User = require('../models/User');
             
             // Get user information for SMS
             const user = await User.findById(userId);
-            if (user) {
+            if (user && server.notificationScheduler) {
+              // Update scheduler data first
+              const users = await User.find({});
+              const medications = await MedicationForm.find({});
+              server.notificationScheduler.setData(users, medications);
+              
               // Add medication reminder to the scheduler
-              if (notificationSchedulerInstance && typeof notificationSchedulerInstance.addMedicationReminder === 'function') {
-                await notificationSchedulerInstance.addMedicationReminder(userId, savedMedication);
+              const result = await server.notificationScheduler.addMedicationReminder(userId, savedMedication);
+              if (result.success) {
                 console.log(`📱 SMS reminders scheduled for medication ${savedMedication._id}`);
               } else {
-                console.error('❌ notificationScheduler.addMedicationReminder is not available');
+                console.error(`❌ Failed to schedule SMS reminders: ${result.error}`);
               }
             } else {
-              console.error(`❌ User not found for SMS scheduling: ${userId}`);
+              console.error(`❌ User not found or notificationScheduler not available: ${userId}`);
             }
           } catch (smsError) {
             console.error('❌ Failed to schedule SMS reminders:', smsError.message);
@@ -224,22 +234,26 @@ router.put('/:id', validateMedication, async (req, res) => {
         
         // Update SMS reminders using the notification scheduler
         try {
-          // Get the notificationScheduler instance instead of the class
-          const notificationSchedulerInstance = require('../server').notificationScheduler;
+          const server = require('../server');
           const User = require('../models/User');
           
           // Get user information for SMS
           const user = await User.findById(userId);
-          if (user) {
+          if (user && server.notificationScheduler) {
+            // Update scheduler data first
+            const users = await User.find({});
+            const medications = await MedicationForm.find({});
+            server.notificationScheduler.setData(users, medications);
+            
             // Update medication reminder in the scheduler
-            if (notificationSchedulerInstance && typeof notificationSchedulerInstance.updateMedicationReminder === 'function') {
-              await notificationSchedulerInstance.updateMedicationReminder(userId, medication);
+            const result = await server.notificationScheduler.updateMedicationReminder(userId, medication);
+            if (result.success) {
               console.log(`📱 SMS reminders updated for medication ${medicationId}`);
             } else {
-              console.error('❌ notificationScheduler.updateMedicationReminder is not available');
+              console.error(`❌ Failed to update SMS reminders: ${result.error}`);
             }
           } else {
-            console.error(`❌ User not found for SMS scheduling: ${userId}`);
+            console.error(`❌ User not found or notificationScheduler not available: ${userId}`);
           }
         } catch (smsError) {
           console.error('❌ Failed to update SMS reminders:', smsError.message);
@@ -276,13 +290,12 @@ router.delete('/:id', async (req, res) => {
     
     // Remove SMS reminders from the scheduler
     try {
-      // Get the notificationScheduler instance instead of the class
-      const notificationSchedulerInstance = require('../server').notificationScheduler;
-      if (notificationSchedulerInstance && typeof notificationSchedulerInstance.removeMedicationReminder === 'function') {
-        await notificationSchedulerInstance.removeMedicationReminder(userId, medicationId);
-        console.log(`📱 SMS reminders removed for medication ${medicationId}`);
+      const server = require('../server');
+      if (server.notificationScheduler) {
+        const removedCount = server.notificationScheduler.removeMedicationReminder(userId, medicationId);
+        console.log(`📱 Removed ${removedCount} SMS reminders for medication ${medicationId}`);
       } else {
-        console.error('❌ notificationScheduler.removeMedicationReminder is not available');
+        console.error('❌ notificationScheduler not available');
       }
     } catch (smsError) {
       console.error('❌ Failed to remove SMS reminders:', smsError.message);

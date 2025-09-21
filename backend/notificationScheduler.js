@@ -74,10 +74,17 @@ class NotificationScheduler {
 
       const job = cron.schedule(cronExpression, async () => {
         try {
+          console.log(`🔔 CRON JOB TRIGGERED for ${medication.name} at ${time}`);
+          console.log(`👤 User: ${user.firstName} ${user.lastName} (${user.phone})`);
+          
           // Use IST timezone for scheduling
           const currentDate = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
           const startDate = new Date(medication.startDate);
           const endDate = medication.endDate ? new Date(medication.endDate) : null;
+          
+          console.log(`🕐 Current IST: ${currentDate.toLocaleString()}`);
+          console.log(`📅 Start Date: ${startDate.toDateString()}`);
+          console.log(`📅 End Date: ${endDate ? endDate.toDateString() : 'No end date'}`);
 
           // Skip if medication is not active
           if (currentDate < startDate || (endDate && currentDate > endDate)) {
@@ -96,10 +103,10 @@ class NotificationScheduler {
           }
 
           // Format phone number for Twilio
-          let formattedPhone = SMSService.formatPhoneNumber(user.phone);
+          const formattedPhone = SMSService.formatPhoneNumber(user.phone);
           if (!formattedPhone) {
-            // fallback: ensure +91 prefix
-            formattedPhone = user.phone.startsWith('+91') ? user.phone : `+91${user.phone}`;
+            console.error(`❌ Invalid phone number format for user ${user.firstName}: ${user.phone}`);
+            return;
           }
 
           const userName = `${user.firstName} ${user.lastName}`;
@@ -191,9 +198,15 @@ class NotificationScheduler {
       }
       
       console.log(`📅 Adding medication reminder for user ${userId}, medication ${medicationId}`);
-      // Check for both id and _id to handle MongoDB documents
-      const user = this.users.find(u => u.id === userId || u._id.toString() === userId);
+      // Check for both id and _id to handle MongoDB documents - more flexible matching
+      const user = this.users.find(u => {
+        const userIdStr = u._id ? u._id.toString() : u.id;
+        const searchIdStr = userId.toString();
+        return userIdStr === searchIdStr || u.id === userId || (u._id && u._id.toString() === userId);
+      });
+      
       if (!user) {
+        console.log(`🔍 Available users: ${this.users.map(u => `${u._id || u.id} (${u.firstName} ${u.lastName})`).join(', ')}`);
         throw new Error(`User not found: ${userId}`);
       }
       
@@ -272,14 +285,24 @@ class NotificationScheduler {
       }
       
       console.log(`📅 Removing medication reminder for user ${userId}, medication ${medicationId}`);
-      // Check for both id and _id to handle MongoDB documents
-      const user = this.users.find(u => u.id === userId || u._id.toString() === userId);
+      // Check for both id and _id to handle MongoDB documents - more flexible matching
+      const user = this.users.find(u => {
+        const userIdStr = u._id ? u._id.toString() : u.id;
+        const searchIdStr = userId.toString();
+        return userIdStr === searchIdStr || u.id === userId || (u._id && u._id.toString() === userId);
+      });
       if (!user) {
         console.warn(`⚠️ User not found: ${userId}`);
         return 0;
       }
       
-      const medication = this.medications.find(m => (m.id === medicationId || m._id === medicationId) && m.userId === userId);
+      const medication = this.medications.find(m => {
+        const medId = m._id ? m._id.toString() : m.id;
+        const searchMedId = medicationId.toString();
+        const medUserId = m.userId ? m.userId.toString() : m.userId;
+        const searchUserId = userId.toString();
+        return (medId === searchMedId || m.id === medicationId) && medUserId === searchUserId;
+      });
       if (!medication) {
         console.warn(`⚠️ Medication not found: ${medicationId} for user  ${userId}`);
         return 0;

@@ -34,10 +34,10 @@ const ScheduledReminders = () => {
           }
         });
 
-        // Filter only medication reminders
-        const medicationReminders = response.data.jobs.filter(job => 
+        // Filter only medication reminders and ensure they exist
+        const medicationReminders = response.data.jobs ? response.data.jobs.filter(job => 
           job.id.startsWith('medication_')
-        );
+        ) : [];
 
         setReminders(medicationReminders);
         setLoading(false);

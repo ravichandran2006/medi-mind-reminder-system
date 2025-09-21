@@ -8,8 +8,6 @@ const MedicationForm = require('../models/MedicationForm');
 const Reminder = require('../models/Reminder');
 const twilio = require('twilio');
 
-
-
 // Webhook for incoming SMS responses
 router.post('/webhook', async (req, res) => {
   try {
@@ -18,7 +16,7 @@ router.post('/webhook', async (req, res) => {
     const incomingMessage = req.body.Body.trim().toUpperCase();
     const fromNumber = req.body.From;
     
-    console.log(`📱 Received SMS from ${fromNumber}: ${incomingMessage}`);
+    console.log(`Received SMS from ${fromNumber}: ${incomingMessage}`);
     
     // Find the user by phone number
     const user = await User.findOne({ phone: fromNumber });
@@ -164,7 +162,7 @@ router.post('/medication-reminder', auth, async (req, res) => {
       });
     }
 
-    const user = User.findById(req.user.userId);
+    const user = await User.findById(req.user.userId);
     if (!user) {
       return res.status(404).json({ 
         success: false, 
@@ -262,7 +260,7 @@ router.post('/health-log-reminder', auth, async (req, res) => {
   }
 });
 
-    // Schedule medication reminder
+// Schedule medication reminder
 router.post('/schedule-medication', auth, async (req, res) => {
   try {
     const { medicationId } = req.body;
@@ -482,7 +480,11 @@ router.put('/update-phone', auth, async (req, res) => {
 
     const formattedPhone = SMSService.formatPhoneNumber(phoneNumber);
     
-    const updatedUser = User.update(req.user.userId, { phone: formattedPhone });
+    const updatedUser = await User.findByIdAndUpdate(
+      req.user.userId, 
+      { phone: formattedPhone },
+      { new: true }
+    );
     
     if (!updatedUser) {
       return res.status(404).json({ 

@@ -72,7 +72,7 @@ const MedicationScheduler = () => {
       }
 
       // Load from backend using new medication form API
-      const response = await fetch(`${API_URL}/medication-form`, {
+      const response = await fetch(`${API_URL}/medications`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -156,7 +156,7 @@ const MedicationScheduler = () => {
         try {
           if (editingMed) {
             // Update existing medication
-            const response = await fetch(`${API_URL}/medication-form/${editingMed._id || editingMed.id}`, {
+            const response = await fetch(`${API_URL}/medications/${editingMed._id || editingMed.id}`, {
               method: 'PUT',
               headers: {
                 'Content-Type': 'application/json',
@@ -171,7 +171,7 @@ const MedicationScheduler = () => {
             }
           } else {
             // Create new medication
-            const response = await fetch(`${API_URL}/medication-form`, {
+            const response = await fetch(`${API_URL}/medications`, {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
@@ -274,7 +274,7 @@ const MedicationScheduler = () => {
       // Try to remove from backend if token exists
       if (token) {
         try {
-          const response = await fetch(`${API_URL}/medication-form/${id}`, {
+          const response = await fetch(`${API_URL}/medications/${id}`, {
             method: 'DELETE',
             headers: {
               'Authorization': `Bearer ${token}`

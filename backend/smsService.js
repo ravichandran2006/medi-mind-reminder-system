@@ -13,12 +13,12 @@ if (isTwilioConfigured) {
   try {
     client = twilio(accountSid, authToken);
     console.log('✅ Twilio client initialized successfully');
-    console.log(`📱 Twilio phone number: ${twilioPhoneNumber}`);
+    console.log(`Twilio phone number: ${twilioPhoneNumber}`);
   } catch (error) {
     console.error('❌ Failed to initialize Twilio client:', error.message);
   }
 } else {
-  console.log('⚠️ Twilio credentials not fully configured:');
+  console.log('⚠ Twilio credentials not fully configured:');
   console.log(`   Account SID: ${accountSid ? 'Set' : 'Missing'}`);
   console.log(`   Auth Token: ${authToken ? 'Set' : 'Missing'}`);
   console.log(`   Phone Number: ${twilioPhoneNumber ? 'Set' : 'Missing'}`);
@@ -43,7 +43,7 @@ class SMSService {
         return { success: false, error: 'Medication name is required', code: 'MISSING_MEDICATION_NAME' };
       }
 
-      console.log(`📱 Attempting to send SMS reminder:`);
+      console.log('Attempting to send SMS reminder:');
       console.log(`   To: ${userPhone}`);
       console.log(`   User: ${userName}`);
       console.log(`   Medication: ${medicationName}`);
@@ -53,7 +53,7 @@ class SMSService {
       
       // Check if Twilio is configured
       if (!this.isAvailable()) {
-        console.log(`📱 [DEV MODE] SMS would be sent to ${userPhone}: It's time to take ${medicationName} at ${time}`);
+        console.log(`[DEV MODE] SMS would be sent to ${userPhone}: It's time to take ${medicationName} at ${time}`);
         return { 
           success: true, 
           messageId: 'dev-mode-' + Date.now(),
@@ -89,7 +89,7 @@ class SMSService {
       // Add snooze option
       message += ` Reply 'SNOOZE' to be reminded again in 15 minutes.`;
       
-      console.log(`📱 Sending SMS via Twilio:`);
+      console.log('Sending SMS via Twilio:');
       console.log(`   From: ${twilioPhoneNumber}`);
       console.log(`   To: ${formattedPhone}`);
       console.log(`   Message: ${message}`);
@@ -134,7 +134,7 @@ class SMSService {
     try {
       // Check if Twilio is configured
       if (!this.isAvailable()) {
-        console.log(`📱 [DEV MODE] Health log reminder would be sent to ${userPhone}`);
+        console.log(`[DEV MODE] Health log reminder would be sent to ${userPhone}`);
         return { 
           success: true, 
           messageId: 'dev-mode-' + Date.now(),
@@ -150,7 +150,7 @@ class SMSService {
         to: userPhone
       });
 
-      console.log(`📱 Health log reminder SMS sent successfully to ${userPhone}: ${result.sid}`);
+      console.log(`Health log reminder SMS sent successfully to ${userPhone}: ${result.sid}`);
       return { success: true, messageId: result.sid };
     } catch (error) {
       console.error('❌ Error sending health log reminder SMS:', error.message);
@@ -167,7 +167,7 @@ class SMSService {
     try {
       // Check if Twilio is configured
       if (!this.isAvailable()) {
-        console.log(`📱 [DEV MODE] Appointment reminder would be sent to ${userPhone} for ${appointmentDate} at ${appointmentTime}`);
+        console.log(`[DEV MODE] Appointment reminder would be sent to ${userPhone} for ${appointmentDate} at ${appointmentTime}`);
         return { 
           success: true, 
           messageId: 'dev-mode-' + Date.now(),
@@ -183,7 +183,7 @@ class SMSService {
         to: userPhone
       });
 
-      console.log(`📱 Appointment reminder SMS sent successfully to ${userPhone}: ${result.sid}`);
+      console.log(`Appointment reminder SMS sent successfully to ${userPhone}: ${result.sid}`);
       return { success: true, messageId: result.sid };
     } catch (error) {
       console.error('❌ Error sending appointment reminder SMS:', error.message);
@@ -203,13 +203,13 @@ class SMSService {
         return { success: false, error: 'Phone number is required', code: 'MISSING_PHONE' };
       }
 
-      console.log(`📱 Attempting to send health log reminder SMS:`);
+      console.log('Attempting to send health log reminder SMS:');
       console.log(`   To: ${userPhone}`);
       console.log(`   User: ${userName}`);
       
       // Check if Twilio is configured
       if (!this.isAvailable()) {
-        console.log(`📱 [DEV MODE] Health log reminder would be sent to ${userPhone}`);
+        console.log(`[DEV MODE] Health log reminder would be sent to ${userPhone}`);
         return { 
           success: true, 
           messageId: 'dev-mode-' + Date.now(),
@@ -226,7 +226,7 @@ class SMSService {
 
       const message = `Hi ${userName}, this is your Medi-Mind reminder: Don't forget to log your health data today! Track your progress for better health.`;
       
-      console.log(`📱 Sending health log reminder SMS via Twilio:`);
+      console.log('Sending health log reminder SMS via Twilio:');
       console.log(`   From: ${twilioPhoneNumber}`);
       console.log(`   To: ${formattedPhone}`);
       console.log(`   Message: ${message}`);
@@ -271,7 +271,7 @@ class SMSService {
     try {
       // Check if Twilio is configured
       if (!this.isAvailable()) {
-        console.log(`📱 [DEV MODE] Health alert would be sent to ${userPhone}: ${message}`);
+        console.log(`[DEV MODE] Health alert would be sent to ${userPhone}: ${message}`);
         return { 
           success: true, 
           messageId: 'dev-mode-' + Date.now(),
@@ -287,7 +287,7 @@ class SMSService {
         to: userPhone
       });
 
-      console.log(`📱 Health alert SMS sent successfully to ${userPhone}: ${result.sid}`);
+      console.log(`Health alert SMS sent successfully to ${userPhone}: ${result.sid}`);
       return { success: true, messageId: result.sid };
     } catch (error) {
       console.error('❌ Error sending health alert SMS:', error.message);
@@ -319,24 +319,24 @@ class SMSService {
     if (!phoneNumber) return null;
     let formatted = phoneNumber.replace(/[\s\-\(\)]/g, '');
     
+    // Indian number format - check first
+    if (formatted.startsWith('+91')) {
+      return formatted; // Already in international format
+    }
+    
+    // If 10 digits Indian number (starts with 6-9)
+    if (/^[6-9]\d{9}$/.test(formatted)) {
+      return '+91' + formatted;
+    }
+    
     // US number format
     if (formatted.startsWith('+1')) {
       return formatted; // Already in international format
     }
     
-    // If 10 digits US number
+    // If 10 digits US number (starts with 2-9)
     if (/^[2-9]\d{9}$/.test(formatted)) {
       return '+1' + formatted;
-    }
-    
-    // Indian number format
-    if (formatted.startsWith('+91')) {
-      return formatted; // Already in international format
-    }
-    
-    // If 10 digits Indian number
-    if (/^[6-9]\d{9}$/.test(formatted)) {
-      return '+91' + formatted;
     }
     
     // Otherwise, return as is (let Twilio handle the validation)
@@ -348,7 +348,7 @@ class SMSService {
     return {
       configured: isTwilioConfigured,
       available: this.isAvailable(),
-      accountSid: accountSid ? '***' + accountSid.slice(-4) : null,
+      accountSid: accountSid ? '*' + accountSid.slice(-4) : null,
       phoneNumber: twilioPhoneNumber
     };
   }

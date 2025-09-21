@@ -10,8 +10,23 @@ const accountSid = process.env.TWILIO_ACCOUNT_SID;
 const authToken = process.env.TWILIO_AUTH_TOKEN;
 const verifySid = process.env.TWILIO_VERIFY_SID; // Add this to your .env file
 
-// Twilio client
-const client = twilio(accountSid, authToken);
+// Check if Twilio credentials are available
+const isTwilioConfigured = accountSid && authToken && verifySid;
+
+let client = null;
+if (isTwilioConfigured) {
+  try {
+    client = twilio(accountSid, authToken);
+    console.log('✅ Twilio OTP client initialized successfully');
+  } catch (error) {
+    console.error('❌ Failed to initialize Twilio OTP client:', error.message);
+  }
+} else {
+  console.log('⚠️ Twilio OTP credentials not fully configured:');
+  console.log(`   Account SID: ${accountSid ? 'Set' : 'Missing'}`);
+  console.log(`   Auth Token: ${authToken ? 'Set' : 'Missing'}`);
+  console.log(`   Verify SID: ${verifySid ? 'Set' : 'Missing'}`);
+}
 
 // Send OTP to Indian mobile number
 router.post('/send-otp', async (req, res) => {
@@ -20,6 +35,17 @@ router.post('/send-otp', async (req, res) => {
   // Validate: must be exactly 10 digits, numeric only
   if (!mobile || !/^\d{10}$/.test(mobile)) {
     return res.status(400).json({ error: 'Valid 10-digit mobile number required' });
+  }
+
+  // Check if Twilio is configured
+  if (!isTwilioConfigured || !client) {
+    console.log(`[DEV MODE] OTP would be sent to +91${mobile}`);
+    return res.json({
+      success: true,
+      message: 'OTP sent successfully (Development Mode)',
+      sid: 'dev-mode-' + Date.now(),
+      devMode: true
+    });
   }
 
   try {
@@ -50,6 +76,17 @@ router.post('/verify-otp', async (req, res) => {
   
   if (!mobile || !otp) {
     return res.status(400).json({ error: 'Mobile and OTP required' });
+  }
+
+  // Check if Twilio is configured
+  if (!isTwilioConfigured || !client) {
+    console.log(`[DEV MODE] OTP verification for +91${mobile} with code: ${otp}`);
+    // In development mode, accept any 6-digit OTP
+    if (/^\d{6}$/.test(otp)) {
+      return res.json({ success: true, verified: true, devMode: true });
+    } else {
+      return res.status(400).json({ success: false, verified: false, error: 'Invalid OTP format' });
+    }
   }
 
   try {

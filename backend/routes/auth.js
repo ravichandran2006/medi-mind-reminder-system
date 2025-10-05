@@ -64,7 +64,18 @@ router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    const user = await User.findOne({ email });
+    let user;
+    
+    // Try MongoDB first, fallback to in-memory storage
+    try {
+      user = await User.findOne({ email });
+    } catch (dbError) {
+      console.log('MongoDB unavailable, using in-memory storage');
+      // Access in-memory users from server.js
+      const inMemoryUsers = global.inMemoryUsers || [];
+      user = inMemoryUsers.find(u => u.email === email);
+    }
+
     if (!user) {
       return res.status(400).json({ errNo: -1, errMsg: 'Invalid credentials' });
     }

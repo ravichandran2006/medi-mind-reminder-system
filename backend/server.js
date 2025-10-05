@@ -1,4 +1,5 @@
-require("dotenv").config();
+// ✅ Load environment variables from backend/.env
+require('dotenv').config({ path: require('path').resolve(__dirname, '.env') });
 
 const express = require('express');
 const cors = require('cors');
@@ -10,33 +11,70 @@ const axios = require('axios');
 const auth = require('./middleware/auth');
 const NotificationScheduler = require('./notificationScheduler');
 
-// ✅ Explicitly load .env from project root (one level up from backend)
-require('dotenv').config({ path: require('path').resolve(__dirname, '../.env') });
-
 const app = express();
 const PORT = process.env.PORT || 5001;
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
+
+// Debug: Check if environment variables are loaded
+console.log('🔧 Environment Variables Check:');
+console.log('   JWT_SECRET:', JWT_SECRET ? 'Loaded ✅' : 'Missing ❌');
+console.log('   GROQ_API_KEY:', GROQ_API_KEY ? 'Loaded ✅' : 'Missing ❌');
+console.log('   TWILIO_ACCOUNT_SID:', process.env.TWILIO_ACCOUNT_SID ? 'Loaded ✅' : 'Missing ❌');
+console.log('   MONGODB_URI:', process.env.MONGODB_URI ? 'Loaded ✅' : 'Using default');
+
+// In-memory storage for when MongoDB is not available
+let inMemoryUsers = [];
+let inMemoryMedications = [];
+let inMemoryChats = [];
 
 // Connect to MongoDB
 async function connectDB() {
   try {
     console.log('🔍 Connecting to MongoDB...');
     const mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/medimate';
-    console.log('📡 MONGODB_URI:', mongoUri);
+    console.log('📡 MONGODB_URI:', mongoUri.replace(/:[^:@]*@/, ':****@')); // Hide password in logs
 
-    if (!process.env.MONGODB_URI) {
-      console.log('⚠️  Using default MongoDB URI. Create .env file for production.');
-    }
-
-    await mongoose.connect(mongoUri);
+    await mongoose.connect(mongoUri, {
+      serverSelectionTimeoutMS: 5000, // Timeout after 5s for local MongoDB
+      socketTimeoutMS: 30000,
+      family: 4, // Use IPv4, skip trying IPv6
+    });
 
     console.log('✅ Connected to MongoDB');
     console.log('   DB Name:', mongoose.connection.name);
+    
+    // Test the connection
+    await mongoose.connection.db.admin().ping();
+    console.log('🏓 MongoDB ping successful');
+    
     return true;
   } catch (err) {
     console.error('❌ MongoDB connection error:', err.message);
-    console.log('💡 Make sure MongoDB is running: mongod');
+    console.log('💡 Fallback: Using in-memory storage');
+    console.log('⚠️  Some features may be limited without persistent database');
+    
+    // Initialize with test data
+    const bcrypt = require('bcryptjs');
+    const testPassword = await bcrypt.hash('123456', 10);
+    
+    inMemoryUsers = [
+      {
+        _id: 'test123',
+        firstName: 'Tom',
+        lastName: 'User',
+        email: 'tom@gmail.com',
+        password: testPassword, // password: '123456'
+        phone: '1234567890',
+        dateOfBirth: new Date('1990-01-01'),
+        createdAt: new Date()
+      }
+    ];
+    
+    // Make it globally available
+    global.inMemoryUsers = inMemoryUsers;
+    console.log('📝 Test user created: tom@gmail.com / password: 123456');
+    
     return false;
   }
 }
@@ -46,7 +84,7 @@ connectDB();
 
 // CORS configuration
 const corsOptions = {
-  origin: ['http://localhost:3000', 'http://localhost:5173', 'http://localhost:8080'],
+  origin: ['http://localhost:3000', 'http://localhost:5173', 'http://localhost:8080', 'http://localhost:8081', 'http://localhost:8082'],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true

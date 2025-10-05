@@ -42,7 +42,8 @@ const MedicalAnalysis = () => {
   const [isAnalysisOpen, setIsAnalysisOpen] = useState(false);
   const { toast } = useToast();
 
-  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001/api';
+  // API URL - Force port 5001 to fix connection issue
+  const API_URL = 'http://localhost:5001/api';
 
   useEffect(() => {
     loadAnalysisHistory();

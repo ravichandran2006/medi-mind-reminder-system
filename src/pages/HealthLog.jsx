@@ -99,33 +99,117 @@ const HealthLog = () => {
     });
   };
 
-  // Mock OCR function
-  const handleImageUpload = (event) => {
+  // Enhanced PaddleOCR function
+  const handleImageUpload = async (event) => {
     const file = event.target.files?.[0];
-    if (file) {
-      // Simulate OCR processing
-      setTimeout(() => {
-        const mockData = {
-          weight: "70.5",
-          heartRate: "72",
-          systolic: "120",
-          diastolic: "80",
-          temperature: "98.6"
-        };
-        
-        setFormData({ ...formData, ...mockData });
-        setIsOCRDialogOpen(false);
-        setIsDialogOpen(true);
-        
-        toast({
-          title: "OCR Processing Complete",
-          description: "Health data extracted from prescription image.",
-        });
-      }, 2000);
+    if (!file) return;
 
+    // Validate file type
+    const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/bmp', 'application/pdf'];
+    if (!validTypes.includes(file.type)) {
+      toast({
+        title: "Invalid File Type",
+        description: "Please upload an image file (JPG, PNG, BMP) or PDF.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    const token = localStorage.getItem('token');
+    if (!token) {
+      toast({
+        title: "Authentication Required",
+        description: "Please login to use OCR functionality.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    try {
+      // Show processing toast
       toast({
         title: "Processing Image",
-        description: "Extracting health data from prescription...",
+        description: "Extracting health data using PaddleOCR...",
+      });
+
+      // Create FormData for file upload
+      const formData = new FormData();
+      formData.append('medicalDocument', file);
+
+      // Upload and analyze with PaddleOCR
+      const response = await fetch('http://localhost:5001/api/medical-analysis/upload', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        body: formData
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'OCR processing failed');
+      }
+
+      const result = await response.json();
+      
+      if (result.success && result.data.analysis.health_data) {
+        const healthData = result.data.analysis.health_data;
+        
+        // Extract health metrics from OCR results
+        const extractedData = {
+          date: new Date().toISOString().split('T')[0]
+        };
+
+        // Blood Pressure
+        if (healthData.vitals.blood_pressure) {
+          extractedData.systolic = healthData.vitals.blood_pressure.systolic.toString();
+          extractedData.diastolic = healthData.vitals.blood_pressure.diastolic.toString();
+        }
+
+        // Heart Rate
+        if (healthData.vitals.heart_rate) {
+          extractedData.heartRate = healthData.vitals.heart_rate.value.toString();
+        }
+
+        // Temperature (convert to Fahrenheit if in Celsius)
+        if (healthData.vitals.temperature) {
+          let temp = healthData.vitals.temperature.value;
+          if (healthData.vitals.temperature.unit === 'C') {
+            temp = (temp * 9/5) + 32; // Convert C to F
+          }
+          extractedData.temperature = temp.toFixed(1);
+        }
+
+        // Weight
+        if (healthData.vitals.weight) {
+          extractedData.weight = healthData.vitals.weight.value.toString();
+        }
+
+        // Notes from OCR
+        if (healthData.notes && healthData.notes.length > 0) {
+          extractedData.notes = healthData.notes.join('. ');
+        }
+
+        // Update form with extracted data
+        setFormData(prev => ({ ...prev, ...extractedData }));
+        setIsOCRDialogOpen(false);
+        setIsDialogOpen(true);
+
+        toast({
+          title: "OCR Processing Complete",
+          description: `Extracted health data with ${(result.data.analysis.ocr_confidence * 100).toFixed(1)}% confidence.`,
+        });
+
+      } else {
+        throw new Error('No health data found in the image');
+      }
+
+    } catch (error) {
+      console.error('OCR processing error:', error);
+      toast({
+        title: "OCR Processing Failed",
+        description: error.message || "Failed to extract health data from image.",
+        variant: "destructive"
       });
     }
   };
@@ -147,26 +231,68 @@ const HealthLog = () => {
     }
   };
 
-  const exportData = () => {
-    const csvContent = [
-      "Date,Weight(kg),Heart Rate(bpm),Blood Pressure,Temperature(°F),Notes",
-      ...healthData.map(data => 
-        `${data.date},${data.weight},${data.heartRate},${data.bloodPressure.systolic}/${data.bloodPressure.diastolic},${data.temperature},${data.notes}`
-      )
-    ].join('\n');
+  const exportData = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      
+      if (token) {
+        // Try to export enhanced CSV with OCR data from backend
+        try {
+          const response = await fetch('http://localhost:5001/api/medical-analysis/export-csv', {
+            headers: {
+              'Authorization': `Bearer ${token}`
+            }
+          });
 
-    const blob = new Blob([csvContent], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'health-log.csv';
-    a.click();
-    window.URL.revokeObjectURL(url);
+          if (response.ok) {
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `health_data_${new Date().toISOString().split('T')[0]}.csv`;
+            a.click();
+            window.URL.revokeObjectURL(url);
 
-    toast({
-      title: "Data Exported",
-      description: "Health log exported as CSV file.",
-    });
+            toast({
+              title: "Enhanced Data Exported",
+              description: "Health log with OCR data exported as CSV file.",
+            });
+            return;
+          }
+        } catch (error) {
+          console.log('Enhanced export failed, using local data:', error);
+        }
+      }
+
+      // Fallback: Export local health data only
+      const csvContent = [
+        "Date,Weight(kg),Heart Rate(bpm),Blood Pressure,Temperature(°F),Notes,Source",
+        ...healthData.map(data => 
+          `${data.date},${data.weight},${data.heartRate},${data.bloodPressure.systolic}/${data.bloodPressure.diastolic},${data.temperature},"${data.notes}",Manual Entry`
+        )
+      ].join('\n');
+
+      const blob = new Blob([csvContent], { type: 'text/csv' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `health_log_${new Date().toISOString().split('T')[0]}.csv`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+
+      toast({
+        title: "Data Exported",
+        description: "Health log exported as CSV file.",
+      });
+
+    } catch (error) {
+      console.error('Export failed:', error);
+      toast({
+        title: "Export Failed",
+        description: "Failed to export health data.",
+        variant: "destructive"
+      });
+    }
   };
 
   return (

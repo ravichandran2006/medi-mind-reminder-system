@@ -54,8 +54,8 @@ const MedicationScheduler = () => {
     tabletAppearance: ""
   });
 
-  // API URL with fallback
-  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001/api';
+  // API URL with fallback - Force port 5001 to fix connection issue
+  const API_URL = 'http://localhost:5001/api';
 
   useEffect(() => {
     loadMedications();

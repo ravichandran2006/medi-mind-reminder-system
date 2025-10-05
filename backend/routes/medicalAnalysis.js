@@ -82,11 +82,11 @@ router.post('/upload', upload.single('medicalDocument'), async (req, res) => {
       });
     }
 
-    // Execute medical analysis using Node.js service
-    const MedicalAnalysisService = require('../services/medicalAnalysisService');
-    const analysisService = new MedicalAnalysisService(groqApiKey);
+    // Execute medical analysis with fallback support
+    const FallbackMedicalAnalysisService = require('../services/fallbackMedicalAnalysisService');
+    const analysisService = new FallbackMedicalAnalysisService(groqApiKey);
     
-    console.log('🔍 Running medical analysis...');
+    console.log('🔍 Running medical analysis (auto-detecting OCR capabilities)...');
     const analysisResult = await analysisService.analyzeMedicalDocument(filePath, req.file.originalname);
 
     // Save analysis to database
@@ -113,7 +113,7 @@ router.post('/upload', upload.single('medicalDocument'), async (req, res) => {
       message: 'Medical document analyzed successfully',
       data: {
         analysisId: medicalAnalysis._id,
-        analysis: analysisResult,
+        analysis: analysisResult.success ? analysisResult.analysis : analysisResult,
         uploadInfo: {
           filename: req.file.originalname,
           uploadDate: medicalAnalysis.uploadDate,
@@ -242,6 +242,39 @@ router.delete('/:id', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to delete analysis'
+    });
+  }
+});
+
+/**
+ * GET /api/medical-analysis/export-csv
+ * Export health data from medical analyses as CSV
+ */
+router.get('/export-csv', async (req, res) => {
+  try {
+    // Get all user's medical analyses
+    const analyses = await MedicalAnalysis.find({ userId: req.user.userId })
+      .sort({ uploadDate: -1 });
+
+    // Generate CSV using fallback service (works with or without Python)
+    const FallbackMedicalAnalysisService = require('../services/fallbackMedicalAnalysisService');
+    const analysisService = new FallbackMedicalAnalysisService(process.env.GROQ_API_KEY);
+    
+    const csvData = analysisService.generateHealthLogCSV(analyses);
+    
+    // Set headers for CSV download
+    const filename = `health_data_${new Date().toISOString().split('T')[0]}.csv`;
+    
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    
+    res.send(csvData);
+
+  } catch (error) {
+    console.error('Error exporting health data CSV:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to export health data'
     });
   }
 });

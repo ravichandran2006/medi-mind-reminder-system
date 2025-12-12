@@ -40,7 +40,7 @@ const HealthLog = () => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isOCRDialogOpen, setIsOCRDialogOpen] = useState(false);
   const { toast } = useToast();
-  const { API_BASE_URL } = await import('@/utils/api.js');
+  
 
   const [formData, setFormData] = useState({
     date: new Date().toISOString().split('T')[0],
@@ -52,7 +52,7 @@ const HealthLog = () => {
     notes: ""
   });
 
-  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5002/api';
+  const API_URL = API_BASE_URL;
 
   // Load health data from localStorage
   useEffect(() => {

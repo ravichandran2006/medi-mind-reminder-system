@@ -1,0 +1,39 @@
+services:
+  - type: web
+    name: medi-mind-frontend
+    runtime: node
+    buildCommand: npm install && npm run build
+    startCommand: npm run preview
+    envVars:
+      - key: VITE_API_URL
+        value: https://medi-mind-reminder-system.onrender.com/api
+    staticSite:
+      buildDir: dist
+      publicDir: .
+
+  - type: web
+    name: medi-mind-backend
+    runtime: node
+    buildCommand: cd backend && npm install
+    startCommand: cd backend && npm start
+    envVars:
+      - key: MONGODB_URI
+        fromDatabase:
+          name: medimate-db
+          property: connectionString
+      - key: JWT_SECRET
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: TWILIO_ACCOUNT_SID
+        sync: false
+      - key: TWILIO_AUTH_TOKEN
+        sync: false
+      - key: TWILIO_PHONE_NUMBER
+        sync: false
+      - key: FRONTEND_URL
+        value: https://medi-mind-reminder-system.onrender.com
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 5001

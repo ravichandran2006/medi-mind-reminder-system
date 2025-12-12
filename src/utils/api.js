@@ -1,1 +1,2 @@
-export const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001/api';
+const PROD_API_DEFAULT = 'https://medi-mind-reminder-system.onrender.com/api';
+export const API_BASE_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? PROD_API_DEFAULT : 'http://localhost:5001/api');

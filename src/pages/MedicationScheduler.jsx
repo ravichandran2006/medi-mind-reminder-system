@@ -9,6 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast.js";
+import { API_BASE_URL } from "@/utils/api.js";
 import { 
   Plus,
   Pill,
@@ -54,8 +55,8 @@ const MedicationScheduler = () => {
     tabletAppearance: ""
   });
 
-  // API URL with fallback
-  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5002/api';
+  // Use centralized API URL from utils
+  const API_URL = API_BASE_URL;
 
   useEffect(() => {
     loadMedications();

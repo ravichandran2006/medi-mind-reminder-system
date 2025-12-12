@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast.js";
+import { API_BASE_URL } from "@/utils/api.js";
 import { 
   Plus,
   Activity,
@@ -39,6 +40,7 @@ const HealthLog = () => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isOCRDialogOpen, setIsOCRDialogOpen] = useState(false);
   const { toast } = useToast();
+  const { API_BASE_URL } = await import('@/utils/api.js');
 
   const [formData, setFormData] = useState({
     date: new Date().toISOString().split('T')[0],

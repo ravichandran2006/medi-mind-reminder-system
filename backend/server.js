@@ -48,10 +48,17 @@ async function connectDB() {
 }
 connectDB();
 
-// ✅ Fixed CORS
-const FRONTEND_ORIGIN = process.env.FRONTEND_URL || 'http://localhost:3000';
+// ✅ CORS configuration with Vercel and Render support
+const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000';
 const corsOptions = {
-  origin: ['http://localhost:3000', 'http://localhost:8080', FRONTEND_ORIGIN],
+  origin: [
+    'http://localhost:3000',
+    'http://localhost:5173',
+    'http://localhost:8080',
+    'https://medi-mind-system.vercel.app',
+    'https://medi-mind-reminder-system.onrender.com',
+    FRONTEND_URL
+  ],
   methods: ['GET','POST','PUT','DELETE','OPTIONS'],
   allowedHeaders: ['Content-Type','Authorization'],
   credentials: true

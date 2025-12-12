@@ -18,7 +18,8 @@ import {
 import medicalHero from "@/assets/medical-hero.jpg";
 import ScheduledReminders from "@/components/ScheduledReminders";
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5002/api';
+import { API_BASE_URL } from '@/utils/api.js';
+const API_URL = API_BASE_URL;
 
 // Dynamic Health Tips
 const healthTips = [

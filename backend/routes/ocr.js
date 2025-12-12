@@ -6,6 +6,18 @@ const fs = require('fs');
 const { spawn } = require('child_process');
 const auth = require('../middleware/auth');
 
+const VENV_PYTHON_PATH = path.join(__dirname, '../../venv/Scripts/python.exe');
+const pythonExecutable = (() => {
+  const customPath = process.env.PYTHON_PATH;
+  if (customPath && fs.existsSync(customPath)) {
+    return customPath;
+  }
+  if (fs.existsSync(VENV_PYTHON_PATH)) {
+    return VENV_PYTHON_PATH;
+  }
+  return 'python';
+})();
+
 // Configure multer for file uploads
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
@@ -48,7 +60,7 @@ router.post('/upload', auth, upload.single('prescription'), async (req, res) => 
     const imagePath = req.file.path;
     
     // Run Python OCR script
-    const pythonProcess = spawn('python', [
+    const pythonProcess = spawn(pythonExecutable, [
       path.join(__dirname, '../ocr_service.py'),
       imagePath
     ]);
@@ -76,6 +88,7 @@ router.post('/upload', auth, upload.single('prescription'), async (req, res) => 
 
       try {
         const healthData = JSON.parse(result);
+        console.log('📄 OCR extracted data:', healthData);
         res.json(healthData);
       } catch (e) {
         res.status(500).json({ error: 'Failed to parse OCR results', details: e.message });

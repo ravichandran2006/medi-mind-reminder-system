@@ -281,7 +281,7 @@ class NotificationScheduler {
       
       const medication = this.medications.find(m => (m.id === medicationId || m._id === medicationId) && m.userId === userId);
       if (!medication) {
-        console.warn(`⚠️ Medication not found: ${medicationId} for user  ${userId}`);
+        console.log(`ℹ️  No existing reminders to remove for medication ${medicationId} (this is normal when updating)`);
         return 0;
       }
       

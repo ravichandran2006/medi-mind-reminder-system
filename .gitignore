@@ -22,3 +22,33 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+# Node modules and environment
+node_modules/
+.env
+nenv
+.env.local
+.env.* 
+
+# Build and OS files
+dist/
+build/
+.DS_Store
+
+# Backend-specific ignores
+/backend/node_modules/
+/backend/.env
+/backend/nenv
+/backend/.env.local
+/backend/dist/
+/backend/build/
+/backend/*.log
+
+# Local caches and temp
+.cache/
+*.local
+
+# Python virtualenvs
+venv/
+ENV/
+.venv/
+env/

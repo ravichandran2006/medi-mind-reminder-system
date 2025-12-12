@@ -1,0 +1,20 @@
+# Auto-detect text files and normalize line endings to LF in the repository.
+# This reduces cross-platform CRLF/LF warnings and makes behavior consistent.
+* text=auto
+
+# Preserve binary files
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.zip binary
+*.gz binary
+*.tar binary
+
+# Force shell scripts to use LF in repo
+*.sh text eol=lf
+
+# Node lockfiles are text
+package-lock.json text
+bun.lockb text

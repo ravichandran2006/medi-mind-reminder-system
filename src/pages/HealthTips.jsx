@@ -220,8 +220,8 @@ const HealthTips = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-accent p-6">
-      <div className="max-w-6xl mx-auto space-y-8">
+    <div className="min-h-screen bg-gradient-accent">
+      <div className="w-full pl-4 pr-6 py-6 space-y-8">
         {/* Header */}
         <div className="text-center">
           <h1 className="text-3xl font-bold text-foreground mb-2">Health Tips & Wellness</h1>

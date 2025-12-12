@@ -153,8 +153,8 @@ const AIChat = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-accent p-6">
-      <div className="max-w-4xl mx-auto">
+    <div className="min-h-screen bg-gradient-accent">
+      <div className="w-full max-w-4xl mx-auto pl-4 pr-6 py-6">
         <Card className="h-[calc(100vh-8rem)] border-0 shadow-card flex flex-col">
           <CardHeader className="border-b bg-gradient-primary text-white rounded-t-lg">
             <div className="flex items-center justify-between">

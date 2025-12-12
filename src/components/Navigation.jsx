@@ -56,11 +56,11 @@ const Navigation = () => {
 
       {/* Navigation Sidebar */}
       <div className={cn(
-        "fixed left-0 top-0 z-40 h-full w-64 bg-white shadow-lg transform transition-transform duration-300 ease-in-out",
-        "lg:translate-x-0",
-        isOpen ? "translate-x-0" : "-translate-x-full"
+        "h-screen w-64 bg-white shadow-lg transform transition-transform duration-300 ease-in-out flex-shrink-0 overflow-y-auto",
+        "lg:relative lg:translate-x-0",
+        isOpen ? "translate-x-0 fixed left-0 top-0 z-40" : "-translate-x-full lg:translate-x-0"
       )}>
-        <div className="p-6">
+        <div className="p-6 h-full">
           {/* Logo */}
           <div className="flex items-center space-x-2 mb-8">
             <div className="p-2 bg-gradient-primary rounded-lg">
@@ -123,10 +123,6 @@ const Navigation = () => {
         </div>
       </div>
 
-      {/* Main Content Wrapper */}
-      <div className="lg:ml-64">
-        {/* This will contain the main content */}
-      </div>
     </>
   );
 };

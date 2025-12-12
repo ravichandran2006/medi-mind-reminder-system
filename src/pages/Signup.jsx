@@ -22,6 +22,7 @@ import {
   Stethoscope,
   Loader2
 } from "lucide-react";
+import { API_BASE_URL } from "@/utils/api";
 
 const Signup = () => {
   const [formData, setFormData] = useState({
@@ -64,11 +65,11 @@ const Signup = () => {
     }
     setOtpLoading(true);
     try {
-      const mobileOnly = formData.phone.slice(3); // send only 10 digits
-      const response = await fetch("http://localhost:5002/api/otp/send-otp", {
+      const phoneOnly = formData.phone.slice(3); // send only 10 digits
+      const response = await fetch(`${API_BASE_URL}/otp/send-otp`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mobile: mobileOnly })
+        body: JSON.stringify({ phone: phoneOnly })
       });
       const data = await response.json();
       if (response.ok) {
@@ -107,11 +108,11 @@ const Signup = () => {
     }
     setOtpLoading(true);
     try {
-      const mobileOnly = formData.phone.slice(3);
-      const response = await fetch("http://localhost:5002/api/otp/verify-otp", {
+      const phoneOnly = formData.phone.slice(3);
+      const response = await fetch(`${API_BASE_URL}/otp/verify-otp`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mobile: mobileOnly, otp })
+        body: JSON.stringify({ mobile: phoneOnly, otp })
       });
       const data = await response.json();
       if (response.ok && data.verified) {
@@ -176,10 +177,19 @@ const Signup = () => {
 
     setIsLoading(true);
     try {
-      const response = await fetch("http://localhost:5002/api/auth/signup", {
+      // Prepare data for backend - remove confirmPassword and ensure phone is sent correctly
+      const signupData = {
+        firstName: formData.firstName.trim(),
+        lastName: formData.lastName.trim(),
+        email: formData.email.trim().toLowerCase(),
+        phone: formData.phone, // Send as is (+91XXXXXXXXXX)
+        password: formData.password
+      };
+
+      const response = await fetch(`${API_BASE_URL}/auth/signup`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData)
+        body: JSON.stringify(signupData)
       });
       const data = await response.json();
 
@@ -191,9 +201,15 @@ const Signup = () => {
         });
         navigate("/");
       } else {
+        // Show detailed error messages
+        let errorMessage = data.message || "Validation failed";
+        if (data.errors && Array.isArray(data.errors) && data.errors.length > 0) {
+          const errorDetails = data.errors.map(err => err.msg || err.message).join(', ');
+          errorMessage = `${errorMessage}: ${errorDetails}`;
+        }
         toast({
           title: "Signup Failed",
-          description: data.message || "Validation failed",
+          description: errorMessage,
           variant: "destructive"
         });
       }

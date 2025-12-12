@@ -18,14 +18,11 @@ const NotificationScheduler = require('./notificationScheduler');
 const notificationScheduler = new NotificationScheduler();
 
 const app = express();
-const PORT = process.env.PORT || 5001;
+const PORT = process.env.PORT || 5002;
 
 // ✅ Enforce JWT secret
-if (!process.env.JWT_SECRET) {
-  throw new Error("❌ JWT_SECRET not defined in .env file");
-}
-const JWT_SECRET = process.env.JWT_SECRET;
-console.log("JWT_SECRET in use:", process.env.JWT_SECRET);
+const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-this-in-production-2024';
+console.log("JWT_SECRET in use:", JWT_SECRET);
 
 // Connect to MongoDB
 async function connectDB() {
@@ -52,10 +49,11 @@ async function connectDB() {
 connectDB();
 
 // ✅ Fixed CORS
+const FRONTEND_ORIGIN = process.env.FRONTEND_URL || 'http://localhost:3000';
 const corsOptions = {
-  origin: ['http://localhost:3000', 'http://localhost:8080'],
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  origin: ['http://localhost:3000', 'http://localhost:8080', FRONTEND_ORIGIN],
+  methods: ['GET','POST','PUT','DELETE','OPTIONS'],
+  allowedHeaders: ['Content-Type','Authorization'],
   credentials: true
 };
 app.use(cors(corsOptions));
@@ -88,11 +86,17 @@ const authenticateToken = (req, res, next) => {
 function formatIndianPhone(raw) {
   if (!raw) return null;
   const digits = raw.replace(/\D/g, '');
+  // Handle 12 digits starting with 91 (from +91XXXXXXXXXX)
   if (digits.length === 12 && digits.startsWith('91')) {
     return `+${digits}`;
   }
+  // Handle 10 digits (Indian mobile number)
   if (digits.length === 10) {
     return `+91${digits}`;
+  }
+  // Handle already formatted +91XXXXXXXXXX (13 chars with +)
+  if (raw.startsWith('+91') && digits.length === 12) {
+    return raw;
   }
   return null;
 }
@@ -137,12 +141,18 @@ app.post('/api/auth/signup', validateSignup, async (req, res) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
+      console.log('Validation errors:', errors.array());
       return res.status(400).json({ message: 'Validation failed', errors: errors.array() });
     }
 
     let { firstName, lastName, email, phone, password } = req.body;
+    
+    // Log received data for debugging
+    console.log('Received signup data:', { firstName, lastName, email, phone: phone ? '***' : 'missing' });
+    
     const formattedPhone = formatIndianPhone(phone);
     if (!formattedPhone) {
+      console.log('Phone formatting failed for:', phone);
       return res.status(400).json({ message: 'Phone must be a valid Indian number (10 digits or +91XXXXXXXXXX)' });
     }
 
@@ -173,7 +183,7 @@ app.post('/api/auth/signup', validateSignup, async (req, res) => {
     const token = jwt.sign(
       { userId: newUser._id, email: newUser.email },
       JWT_SECRET,
-      { expiresIn: '7d' }
+      { expiresIn: '30d' }
     );
 
     const { password: _, ...userWithoutPassword } = newUser.toObject();
@@ -198,20 +208,29 @@ app.post('/api/auth/login', validateLogin, async (req, res) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
+      console.log('Login validation errors:', errors.array());
       return res.status(400).json({ message: 'Validation failed', errors: errors.array() });
     }
 
     const { email, password } = req.body;
-    const user = await User.findOne({ email });
-    if (!user) return res.status(401).json({ message: 'Invalid credentials' });
+    const normalizedEmail = email.trim().toLowerCase();
+    
+    const user = await User.findOne({ email: normalizedEmail });
+    if (!user) {
+      console.log('Login failed: User not found for email:', normalizedEmail);
+      return res.status(401).json({ message: 'Invalid credentials' });
+    }
 
     const isValidPassword = await bcrypt.compare(password, user.password);
-    if (!isValidPassword) return res.status(401).json({ message: 'Invalid credentials' });
+    if (!isValidPassword) {
+      console.log('Login failed: Invalid password for email:', normalizedEmail);
+      return res.status(401).json({ message: 'Invalid credentials' });
+    }
 
     const token = jwt.sign(
       { userId: user._id, email: user.email },
       JWT_SECRET,
-      { expiresIn: '7d' }
+      { expiresIn: '30d' }
     );
 
     const { password: _, ...userWithoutPassword } = user.toObject();
@@ -265,7 +284,12 @@ try {
 
     try {
       const users = await User.find({}, 'firstName lastName phone');
-      notificationScheduler.setData(users || [], []);
+      const MedicationForm = require('./models/MedicationForm');
+      const medications = await MedicationForm.find({});
+      
+      console.log(`📊 Loaded ${users.length} users and ${medications.length} medications`);
+      
+      notificationScheduler.setData(users || [], medications || []);
       await notificationScheduler.initializeNotifications();
     } catch (e) {
       console.error('❌ Failed to initialize scheduler:', e.message);

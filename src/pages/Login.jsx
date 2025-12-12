@@ -71,9 +71,15 @@ const Login = () => {
         // Redirect to dashboard
         navigate('/');
       } else {
+        // Show detailed error messages
+        let errorMessage = data.message || "Invalid credentials";
+        if (data.errors && Array.isArray(data.errors) && data.errors.length > 0) {
+          const errorDetails = data.errors.map(err => err.msg || err.message).join(', ');
+          errorMessage = `${errorMessage}: ${errorDetails}`;
+        }
         toast({
           title: "Login Failed",
-          description: data.message || "Invalid credentials",
+          description: errorMessage,
           variant: "destructive"
         });
       }

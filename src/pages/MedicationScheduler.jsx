@@ -361,8 +361,8 @@ const MedicationScheduler = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-6">
-      <div className="max-w-6xl mx-auto space-y-8">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+      <div className="w-full pl-4 pr-6 py-6 space-y-8">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>

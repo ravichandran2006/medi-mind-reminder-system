@@ -35,7 +35,7 @@ const App = () => (
               <ProtectedRoute>
                 <div className="flex min-h-screen w-full">
                   <Navigation />
-                  <div className="lg:ml-64 flex-1">
+                  <div className="flex-1 overflow-x-hidden">
                     <Dashboard />
                   </div>
                   <ReminderSystem />
@@ -47,7 +47,7 @@ const App = () => (
               <ProtectedRoute>
                 <div className="flex min-h-screen w-full">
                   <Navigation />
-                  <div className="lg:ml-64 flex-1">
+                  <div className="flex-1 overflow-x-hidden">
                     <MedicationScheduler />
                   </div>
                   <ReminderSystem />
@@ -59,7 +59,7 @@ const App = () => (
               <ProtectedRoute>
                 <div className="flex min-h-screen w-full">
                   <Navigation />
-                  <div className="lg:ml-64 flex-1">
+                  <div className="flex-1 overflow-x-hidden">
                     <HealthLog />
                   </div>
                   <ReminderSystem />
@@ -71,7 +71,7 @@ const App = () => (
               <ProtectedRoute>
                 <div className="flex min-h-screen w-full">
                   <Navigation />
-                  <div className="lg:ml-64 flex-1">
+                  <div className="flex-1 overflow-x-hidden">
                     <AIChat />
                   </div>
                   <ReminderSystem />
@@ -83,7 +83,7 @@ const App = () => (
               <ProtectedRoute>
                 <div className="flex min-h-screen w-full">
                   <Navigation />
-                  <div className="lg:ml-64 flex-1">
+                  <div className="flex-1 overflow-x-hidden">
                     <HealthTips />
                   </div>
                   <ReminderSystem />

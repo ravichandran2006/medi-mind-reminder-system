@@ -1,19 +1,43 @@
 const twilio = require('twilio');
 
+// Helper to sanitize Twilio phone numbers (removes hidden RTL chars, spaces, etc.)
+function normalizeTwilioNumber(number) {
+  if (!number) return null;
+  // Remove zero-width and direction formatting characters
+  const withoutInvisible = number.replace(/[\u200e\u200f\u202a-\u202e\u2066-\u2069]/g, '');
+  // Remove spaces, hyphens, parentheses and other non-digit/plus chars
+  let normalized = withoutInvisible.replace(/[^\d+]/g, '');
+  // Ensure the number starts with +
+  if (!normalized.startsWith('+') && /^\d+$/.test(normalized)) {
+    normalized = `+${normalized}`;
+  }
+  return /^\+\d+$/.test(normalized) ? normalized : null;
+}
+
 // Twilio configuration
 const accountSid = process.env.TWILIO_ACCOUNT_SID;
 const authToken = process.env.TWILIO_AUTH_TOKEN;
-const twilioPhoneNumber = process.env.TWILIO_PHONE_NUMBER;
+const twilioPhoneNumberRaw = process.env.TWILIO_PHONE_NUMBER;
+const twilioPhoneNumber = normalizeTwilioNumber(twilioPhoneNumberRaw);
+const messagingServiceSid = process.env.TWILIO_MESSAGING_SERVICE_SID;
 
 // Check if Twilio credentials are available
-const isTwilioConfigured = accountSid && authToken && twilioPhoneNumber;
+const isTwilioConfigured = accountSid && authToken && (twilioPhoneNumber || messagingServiceSid);
 
 let client = null;
 if (isTwilioConfigured) {
   try {
     client = twilio(accountSid, authToken);
+    if (twilioPhoneNumberRaw && twilioPhoneNumberRaw !== twilioPhoneNumber) {
+      console.warn('⚠️ Twilio phone number contained extra characters. Using sanitized value:', twilioPhoneNumber);
+    }
     console.log('✅ Twilio client initialized successfully');
-    console.log(`📱 Twilio phone number: ${twilioPhoneNumber}`);
+    if (twilioPhoneNumber) {
+      console.log(`📱 Twilio phone number: ${twilioPhoneNumber}`);
+    }
+    if (messagingServiceSid) {
+      console.log(`🛠️ Using Messaging Service SID: ${messagingServiceSid}`);
+    }
   } catch (error) {
     console.error('❌ Failed to initialize Twilio client:', error.message);
   }
@@ -22,6 +46,7 @@ if (isTwilioConfigured) {
   console.log(`   Account SID: ${accountSid ? 'Set' : 'Missing'}`);
   console.log(`   Auth Token: ${authToken ? 'Set' : 'Missing'}`);
   console.log(`   Phone Number: ${twilioPhoneNumber ? 'Set' : 'Missing'}`);
+  console.log(`   Messaging Service SID: ${messagingServiceSid ? 'Set' : 'Missing'}`);
 }
 
 class SMSService {
@@ -89,16 +114,26 @@ class SMSService {
       // Add snooze option
       message += ` Reply 'SNOOZE' to be reminded again in 15 minutes.`;
       
-      console.log(`📱 Sending SMS via Twilio:`);
+    console.log(`📱 Sending SMS via Twilio:`);
+    if (twilioPhoneNumber) {
       console.log(`   From: ${twilioPhoneNumber}`);
+    } else if (messagingServiceSid) {
+      console.log(`   Messaging Service SID: ${messagingServiceSid}`);
+    }
       console.log(`   To: ${formattedPhone}`);
       console.log(`   Message: ${message}`);
       
-      const result = await client.messages.create({
+    const payload = {
         body: message,
-        from: twilioPhoneNumber,
         to: formattedPhone
-      });
+    };
+    if (twilioPhoneNumber) {
+      payload.from = twilioPhoneNumber;
+    } else if (messagingServiceSid) {
+      payload.messagingServiceSid = messagingServiceSid;
+    }
+
+    const result = await client.messages.create(payload);
 
       console.log(`✅ SMS sent successfully to ${formattedPhone}: ${result.sid}`);
       return { success: true, messageId: result.sid, code: 'SUCCESS' };
@@ -110,14 +145,18 @@ class SMSService {
       let errorCode = 'UNKNOWN_ERROR';
       if (error.code === 21211) {
         errorCode = 'INVALID_PHONE';
-      } else if (error.code === 21608) {
+  } else if (error.code === 21608) {
         errorCode = 'UNVERIFIED_PHONE';
       } else if (error.code === 21610) {
         errorCode = 'MESSAGE_QUEUE_FULL';
       } else if (error.code === 20003) {
         errorCode = 'AUTHENTICATION_ERROR';
-      } else if (error.code === 20404) {
+  } else if (error.code === 20404) {
         errorCode = 'RESOURCE_NOT_FOUND';
+  } else if (error.code === 21212) {
+    errorCode = 'INVALID_FROM_NUMBER';
+  } else if (error.code === 21659) {
+    errorCode = 'COUNTRY_SHORTCODE_MISMATCH';
       }
       
       return { 
@@ -349,7 +388,8 @@ class SMSService {
       configured: isTwilioConfigured,
       available: this.isAvailable(),
       accountSid: accountSid ? '***' + accountSid.slice(-4) : null,
-      phoneNumber: twilioPhoneNumber
+      phoneNumber: twilioPhoneNumber,
+      messagingServiceSid
     };
   }
 }
